@@ -1,6 +1,11 @@
+import json
+
+import pytest
+
+from petkit_local import ptz
 from petkit_local.devices import defaults
 from petkit_local.devices.base import Device
-import pytest
+from petkit_local.patchers import common as patcher_common
 
 from petkit_local.ha.categories import get_entities_for_device
 from petkit_local.ha.commands import (
@@ -365,6 +370,10 @@ def test_a_command_id_stays_within_signed_int32():
     from petkit_local.ha.commands import ALL_ACTIONS
     device = Device(device_type="d4sh", petkit_id=1, serial_number="F")
     for name, make in ALL_ACTIONS.items():
+        if name.startswith("ptz_"):
+            # T6-only, and the envelope is a run_cmd string rather than an `id`
+            # command; those actions are covered by the PTZ tests below.
+            continue
         result = make(device)
         if result is None:
             continue
@@ -410,6 +419,14 @@ def _t6():
     d = Device(device_type="t6", petkit_id=2, serial_number="SN6")
     d.config.setdefault("settings", defaults.default_settings(d))
     return d, _settable_index(d)
+
+
+def _t6_ready():
+    d, idx = _t6()
+    d.firmware = "951"
+    d.online = True
+    d.state["workingState"] = -1
+    return d, idx
 
 
 def test_a_purobot_ultra_has_no_n50_button_and_a_pack_one_instead():
@@ -496,3 +513,60 @@ def test_the_litter_type_seed_is_gone():
     idx = _settable_index(dev)
     _, payload = handle_ha_command(dev, idx["sand_type"], "mixed")
     assert payload["params"] == {"sandType": 3}
+
+
+def test_ptz_buttons_exist_on_the_t6():
+    _, idx = _t6()
+    assert {"ptz_left", "ptz_right", "ptz_flip"} <= set(idx)
+
+
+@pytest.mark.parametrize("key,kind", [
+    ("ptz_left", "left"),
+    ("ptz_right", "right"),
+    ("ptz_flip", "flip"),
+])
+def test_ptz_buttons_stage_the_matching_helper(key, kind, tmp_path, monkeypatch):
+    d, idx = _t6_ready()
+    monkeypatch.setattr(patcher_common, "STAGE_DIR", str(tmp_path))
+    monkeypatch.setattr(ptz, "release_later", lambda *a, **k: None)
+    ptz.configure("http://192.0.2.10:18080/6/")
+
+    suffix, payload = handle_ha_command(d, idx[key], "")
+    assert suffix == "user/get"
+    env = json.loads(payload)
+    cmd = env["user_cmd"]["run_cmd"]
+    assert f"/patcher/download/2/ptz_{kind}" in cmd
+    assert "wget -q -O /tmp/ptz.bin" in cmd
+    assert "/tmp/ptz.bin" in cmd
+
+    staged = tmp_path / "2" / f"ptz_{kind}"
+    assert staged.is_file()
+    assert staged.read_bytes() == (ptz._HELPER_DIR / f"ptz_{kind}").read_bytes()
+
+
+def test_ptz_refuses_a_busy_device(monkeypatch, tmp_path):
+    d, idx = _t6_ready()
+    d.state["workingState"] = 0
+    monkeypatch.setattr(patcher_common, "STAGE_DIR", str(tmp_path))
+    ptz.configure("http://192.0.2.10:18080/6/")
+    with pytest.raises(Refused):
+        handle_ha_command(d, idx["ptz_left"], "")
+
+
+def test_ptz_refuses_when_privacy_mode_locks_the_camera(monkeypatch, tmp_path):
+    d, idx = _t6_ready()
+    d.config["settings"]["homeMode"] = 1
+    d.config["settings"]["cameraInward"] = 1
+    monkeypatch.setattr(patcher_common, "STAGE_DIR", str(tmp_path))
+    ptz.configure("http://192.0.2.10:18080/6/")
+    with pytest.raises(Refused):
+        handle_ha_command(d, idx["ptz_flip"], "")
+
+
+def test_ptz_refuses_an_unverified_firmware(monkeypatch, tmp_path):
+    d, idx = _t6_ready()
+    d.firmware = "999"
+    monkeypatch.setattr(patcher_common, "STAGE_DIR", str(tmp_path))
+    ptz.configure("http://192.0.2.10:18080/6/")
+    with pytest.raises(Refused):
+        handle_ha_command(d, idx["ptz_left"], "")

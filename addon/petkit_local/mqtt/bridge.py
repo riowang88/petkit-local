@@ -655,7 +655,7 @@ class MQTTBridge:
             return {"result": result}
         return None
 
-    async def publish_to_device(self, device: Device, topic_suffix: str, payload: dict) -> None:
+    async def publish_to_device(self, device: Device, topic_suffix: str, payload: dict | str) -> None:
         """Push a command to a device over `thing/service/{topic_suffix}`.
 
         The one method here called from outside: `ha/publisher.py` wires the
@@ -664,9 +664,21 @@ class MQTTBridge:
         command for the next HTTP heartbeat, and it can only do that if a
         failure is visible.
 
+        ``user/get`` is special: it is the only downstream topic that carries
+        the firmware's ``msgType`` envelope, and patchers/the camera helper
+        already use it. Sending that envelope under ``thing/service/user/get``
+        would reach a parser that cannot read it, so route it through
+        ``publish_user_get`` instead.
+
         Raises:
             ConnectionError: the bridge is not connected to the broker.
         """
+        if topic_suffix == "user/get":
+            data = json.loads(payload) if isinstance(payload, str) else payload
+            if not await self.publish_user_get(device, data):
+                raise ConnectionError("MQTT bridge not connected")
+            return
+
         if not self._client:
             raise ConnectionError("MQTT bridge not connected")
 

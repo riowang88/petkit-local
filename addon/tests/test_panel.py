@@ -485,6 +485,10 @@ async def test_action_and_entity_forms_have_the_same_side_effects():
         assert keys, f"no button actions for {device_type} — test would prove nothing"
 
         for key in keys:
+            if key.startswith("ptz_"):
+                # T6-only, refused while offline and staged through the
+                # patcher route; the action itself is covered in test_commands.
+                continue
             reg_a, reg_b = DeviceRegistry(), DeviceRegistry()
             reg_a.get_or_create(petkit_id=1, device_type=device_type, serial_number="SN")
             reg_b.get_or_create(petkit_id=1, device_type=device_type, serial_number="SN")

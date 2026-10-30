@@ -58,6 +58,9 @@ if TYPE_CHECKING:
 DESTRUCTIVE_ACTIONS = {
     "dump_litter", "maintenance_start", "reset_n50", "reset_n60",
     "reset_desiccant", "reset_bagbox",
+    # The 180-degree flip repositions the camera; the small left/right steps do
+    # not warrant a confirmation on every press.
+    "ptz_flip",
 }
 
 

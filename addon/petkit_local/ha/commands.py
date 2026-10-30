@@ -23,6 +23,7 @@ import logging
 import time
 from typing import Any
 
+from petkit_local import ptz
 from petkit_local.devices.base import Device, Refused
 from petkit_local.devices.state_parsers import record_consumable_reset
 from petkit_local.events import codes
@@ -37,7 +38,7 @@ log = logging.getLogger(__name__)
 
 # What every routed command looks like: the thing/service topic suffix to
 # publish under, and the Aliyun envelope to publish there.
-Command = tuple[str, dict[str, Any]]
+Command = tuple[str, dict[str, Any] | str]
 
 
 PROPERTY_SET_SUFFIX = "property/set"
@@ -163,6 +164,45 @@ def _reset_bagbox(_device: Device) -> Command:
     )
 
 
+def _ptz(device: Device, kind: str) -> Command:
+    """Move the T6 camera one small step, or flip it 180 degrees.
+
+    The device exposes no HTTP service for this: the only entry is internal
+    message 4100 on ``/msg_dispatch_2``. A 464-byte MIPS helper is staged behind
+    the existing ``/patcher/download`` route and run from ``/tmp`` by a
+    ``run_cmd``, so nothing persists on the device and no new LAN listener is
+    opened.
+
+    Refuses before staging when the device is offline, busy, or locked into
+    privacy mode with the camera turned inward: the firmware would answer
+    status 7 and the user would see nothing move.
+    """
+    if device.device_type != "t6" or not device.is_camera:
+        raise Refused("camera movement is only available on T6 models")
+    if not device.online:
+        raise Refused("device is offline")
+    if str(device.firmware) not in ("951", "929"):
+        raise Refused(f"camera movement is not verified on firmware {device.firmware!r}")
+    working = (device.state or {}).get("workingState")
+    if working is not None and working != -1:
+        raise Refused("device is busy; wait until it is idle")
+    settings = device.config.get("settings") or {}
+    if to_bool(settings.get("homeMode"), False) and to_bool(settings.get("cameraInward"), False):
+        raise Refused("privacy mode with the camera inward locks movement")
+    try:
+        filename = ptz.stage(kind, device.petkit_id)
+        url = ptz.staged_url(filename, device.petkit_id)
+    except Exception as exc:  # noqa: BLE001 - staging failure is a refusal, not a 500
+        raise Refused(f"cannot stage the camera helper: {exc}") from exc
+    cmd = (
+        f"wget -q -O /tmp/ptz.bin {url} && "
+        f"chmod +x /tmp/ptz.bin && /tmp/ptz.bin; "
+        f"rm -f /tmp/ptz.bin"
+    )
+    ptz.release_later(filename, device.petkit_id)
+    return ("user/get", json.dumps({"msgType": 0, "user_cmd": {"run_cmd": cmd}}))
+
+
 def _litter_ctrl(action_key: str, code: int) -> Command:
     """Interrupt a running litter action (pause/resume).
 
@@ -217,6 +257,10 @@ LITTER_ACTIONS = {
     "pack_waste": lambda device: _litter_start(8),
     "open_sealed_door": lambda device: _litter_start(11),
     "reset_bagbox": _reset_bagbox,
+    # T6 camera movement through internal message 4100 (see ptz.py).
+    "ptz_left": lambda device: _ptz(device, "left"),
+    "ptz_right": lambda device: _ptz(device, "right"),
+    "ptz_flip": lambda device: _ptz(device, "flip"),
     # no localkit reference; best-effort control verbs
     "pause": lambda device: _litter_ctrl("stop_action", 0),
     "resume": lambda device: _litter_ctrl("continue_action", 0),

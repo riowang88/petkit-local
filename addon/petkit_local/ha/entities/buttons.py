@@ -59,6 +59,13 @@ LITTER_T6_BUTTONS = [
               icon="mdi:door-open"),
     EntityDef(component="button", key="reset_bagbox", name="Reset Bag Counter",
               icon="mdi:counter"),
+    # Camera movement: one small step per press, plus the 180-degree flip.
+    EntityDef(component="button", key="ptz_left", name="Move Camera Left",
+              icon="mdi:arrow-left-bold"),
+    EntityDef(component="button", key="ptz_right", name="Move Camera Right",
+              icon="mdi:arrow-right-bold"),
+    EntityDef(component="button", key="ptz_flip", name="Flip Camera",
+              icon="mdi:camera-flip"),
 ]
 
 FEEDER_BUTTONS = [

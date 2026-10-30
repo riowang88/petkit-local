@@ -263,6 +263,10 @@ def test_a_command_is_labelled_with_a_msg_type_the_device_dispatches():
 
     device = Device(device_type="d4sh", petkit_id=1, serial_number="F")
     for key, build in ALL_ACTIONS.items():
+        if key.startswith("ptz_"):
+            # T6-only, and its envelope is an already-encoded run_cmd string
+            # rather than a service envelope; covered by the PTZ tests.
+            continue
         suffix, envelope = build(device)
         content = json.loads(_to_heartbeat_content(
             {**envelope, "_service_suffix": suffix}))

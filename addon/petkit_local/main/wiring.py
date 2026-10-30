@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 
 from aiohttp import web
 
+from petkit_local import ptz
 from petkit_local.ai.pets import PetRegistry
 from petkit_local.config import Config
 from petkit_local.devices.ble import BLERegistry
@@ -187,6 +188,7 @@ def build_services(config: Config, args: argparse.Namespace) -> Services:
     # bridge all read, so a live setting change reaches every one of them
     # without a restart. Built BEFORE the bridge because the bridge holds it.
     app_config = config.to_app_config()
+    ptz.configure(config.api_url)
 
     # The camera sidecar. Constructed here so the panel and the HA publisher can
     # ask it for an RTSP URL; it starts nothing until `start_background` and
