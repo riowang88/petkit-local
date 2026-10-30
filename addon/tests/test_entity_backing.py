@@ -95,6 +95,14 @@ UNSEEDED_BY_DESIGN = {
     # Seeded until 2026-08-09 as `0`, which is not one of its three values.
     # `to_device_info` served that back as the litter the box is filled with.
     "sandType",
+    # Purobot Ultra privacy mode. Each is looked up by T6 951's
+    # `parse_recv_property_set_normal` (`codes.LITTER_T6_HOME_MODE_SET_FIELDS`),
+    # so the write lands; no device has reported a value, so any seed would be
+    # a privacy setting we PUSH to somebody's box.
+    "homeMode",
+    "cameraInward",
+    "cameraOff",
+    "noSound",
 }
 
 #: `state.*` keys whose ONLY backing is a parser passthrough list, with the
@@ -118,6 +126,7 @@ PASSTHROUGH_ATTESTED = {
     "sealDoorState": "T6 capture 2026-08-11: 3475 posts, values 0 / 1 (179)",
     "boxStoreState": "T6 capture 2026-08-11: 3475 posts, values 0 (3470) / 2 (5)",
     "packageCount": "T6 capture 2026-08-11: 3475 posts, values 10 and 9",
+    "cameraPosition": "2026-08-11 four-family capture property/post; T6 fw 929 report (value 2)",
     # In real T5 `ctrl`, and in all 1254 captured litter snapshots.
     "sprayState": "T5 ctrl string table; 1254/1254 captured snapshots",
     "boxState": "T5 ctrl string table; 1254/1254 captured snapshots",

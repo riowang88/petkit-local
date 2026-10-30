@@ -879,6 +879,58 @@ LITTER_START_ACTIONS: dict[int, tuple[str, str]] = {
     11: ("open sealed door", CONFIRMED),
 }
 
+#: The Purobot Ultra's privacy ("home") mode, as `property.set` fields.
+#:
+#: The SET side of the protocol, like `FOUNTAIN_W7H_SET_FIELDS`, and graded per
+#: field because nothing here has been written to a box yet. Names come from two
+#: sources that agree: pypetkitapi's settings table (`homeMode`, `cameraInward`
+#: marked T6, `cameraOff`, `noSound`, each 0/1), and T6 firmware 951's
+#: `parse_recv_property_set_normal`, which looks all four up with
+#: `cJSON_GetObjectItem` in that order and logs `set user_home_mode homeMode`,
+#: `... camera_sta` (cameraOff), `... ptz_in_sta` (cameraInward) and `...
+#: noSound`.
+#:
+#: **The value must be a JSON NUMBER.** Every one is read as cJSON `valueint`
+#: (`lw v0,20(v0)`) — the opposite of `timezone` on the same parser, which reads
+#: `valuestring` and makes a number a silent no-op. Here a string would be the
+#: no-op.
+#:
+#: What the firmware does with them, as far as that one function shows:
+#:
+#:   * `cameraOff`, `cameraInward`, `noSound` are each stored into their own
+#:     `g_config` slot when they differ from it, and nothing else happens in
+#:     this function — no motor, no camera call. They read as OPTIONS of privacy
+#:     mode, not as actions, which is also why they are not the `camera` and
+#:     `microphone` settings under other names.
+#:   * `homeMode` is gated. Unless a `g_config` flag is set or
+#:     `pk_get_user_home_mode_err_code` returns -1, it logs `userHomeInfo_first_over
+#:     (%d), not set homeMode` and RETURNS from the whole parser — so any field
+#:     sent in the same write after it is dropped too. `ha/commands.py` sends one
+#:     field per write, which keeps that from mattering. Past the gate it calls
+#:     `pk_user_home_mode_set_mode_on` or `pk_WAN_send_ctrl_action_2_HMI(1, 12,
+#:     0)`, depending on that error code again.
+#:
+#: Unverified on hardware: whether `cameraInward` alone turns the camera or
+#: only takes effect with `homeMode` on, and what firmware 929 does at all (not
+#: read). Hence `unverified` — named by firmware RE, never seen on our wire.
+LITTER_T6_HOME_MODE_SET_FIELDS: dict[str, tuple[str, str]] = {
+    "homeMode": ("privacy mode on/off", UNVERIFIED),
+    "cameraInward": ("turn the camera inward in privacy mode", UNVERIFIED),
+    "cameraOff": ("turn the camera off in privacy mode", UNVERIFIED),
+    "noSound": ("turn the microphone off in privacy mode", UNVERIFIED),
+}
+
+#: Purobot Ultra state-report fields whose meaning is not settled.
+#:
+#: `cameraPosition` is on the wire: in the 2026-08-11 four-family capture's
+#: `property/post`, and 2 in a T6 (fw 929) report. Probably the result of
+#: `cameraInward`, but no value has ever been watched changing, so it is
+#: published as the raw integer and nothing may label its values. Graded
+#: `unverified` for its MEANING; its presence is not in doubt.
+LITTER_T6_STATE_FIELDS: dict[str, tuple[str, str]] = {
+    "cameraPosition": ("camera position, raw integer; values not decoded", UNVERIFIED),
+}
+
 #: The litter a box is told it is filled with (`settings.sandType`).
 #:
 #: The whole enum, from a controlled 1 -> 2 -> 3 -> 1 run through the app's own

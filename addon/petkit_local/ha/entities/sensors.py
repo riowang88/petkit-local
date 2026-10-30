@@ -194,6 +194,15 @@ LITTER_PACKAGING_SENSORS = [
               value_path="state.packageCount", icon="mdi:counter"),
 ]
 
+#: Where the Purobot Ultra says its camera points. Published RAW: the field is
+#: on the wire but no value has been decoded (`codes.LITTER_T6_STATE_FIELDS`),
+#: so no unit and no option labels — a label would be invented.
+LITTER_T6_SENSORS = [
+    EntityDef(component="sensor", key="camera_position", name="Camera Position",
+              value_path="state.cameraPosition", icon="mdi:camera-flip-outline",
+              entity_category="diagnostic"),
+]
+
 FEEDER_SENSORS = [
     EntityDef(component="sensor", key="device_status", name="Device Status",
               value_path="state.workingState", icon="mdi:state-machine"),

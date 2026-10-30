@@ -428,6 +428,13 @@ def _parse_litter_camera(body: dict[str, Any]) -> dict[str, Any]:
         # `aiAnalyse` sits beside it and was 0 in all 733 captured reports;
         # what turns it on is not known.
         "discernPic", "aiAnalyse",
+        # Where the camera points, raw (`codes.LITTER_T6_STATE_FIELDS`). A
+        # POSITION, not one of `PRESENCE_FLAGS`: those describe something
+        # happening and are absent when it is not, whereas a camera always
+        # points somewhere and the T6 reports carrying it are full snapshots.
+        # So a report without it says nothing, and the last reported value is
+        # kept rather than read as 0 -- the same as every other field here.
+        "cameraPosition",
     ], state)
     # Extract from nested sub-objects (real T5 format). Placed AFTER
     # _extract_camel so nested values override any flat keys.
@@ -635,7 +642,7 @@ def normalize_property_params(device_type: str, params: dict[str, Any]) -> dict[
     # in this module.
     for key in ("cameraStatus", "sprayState", "boxState", "weightState",
                 "refreshState", "ota",
-                "discernPic", "aiAnalyse",
+                "discernPic", "aiAnalyse", "cameraPosition",
                 "sprayResetTime", "liquidReset"):
         if key in params:
             flat[key] = params[key]

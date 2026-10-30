@@ -111,6 +111,29 @@ LITTER_CAMERA_SWITCHES = [
               entity_category="config"),
 ]
 
+#: The Purobot Ultra's privacy ("home") mode and its three options, written
+#: through the generic `property.set` path as integer 0/1. Wire names and the
+#: firmware evidence are in `codes.LITTER_T6_HOME_MODE_SET_FIELDS`.
+#:
+#: `camera_off` and `no_sound` are NOT `camera` and `microphone`: the firmware
+#: keeps them in slots of their own and only stores them, so they are what
+#: privacy mode does when it is on, not the everyday switches. Merging them would
+#: write one field while the owner meant the other.
+#:
+#: None is seeded (`UNSEEDED_BY_DESIGN`). No device has reported a value, and
+#: `to_device_info` would serve an invented one to the box as its owner's
+#: setting — so each reads unknown until someone sets it or the device says.
+LITTER_T6_SWITCHES = [
+    EntityDef(component="switch", key="home_mode", name="Privacy Mode",
+              value_path="settings.homeMode", icon="mdi:shield-home"),
+    EntityDef(component="switch", key="camera_inward", name="Camera Inward in Privacy Mode",
+              value_path="settings.cameraInward", icon="mdi:camera-flip"),
+    EntityDef(component="switch", key="camera_off", name="Camera Off in Privacy Mode",
+              value_path="settings.cameraOff", icon="mdi:camera-off"),
+    EntityDef(component="switch", key="no_sound", name="Microphone Off in Privacy Mode",
+              value_path="settings.noSound", icon="mdi:microphone-off"),
+]
+
 FEEDER_SWITCHES = [
     EntityDef(component="switch", key="child_lock", name="Child Lock",
               value_path="settings.manualLock", icon="mdi:lock"),

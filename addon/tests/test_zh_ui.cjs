@@ -42,6 +42,11 @@ const assert = require('node:assert/strict');
       entityName('cleaning_event', 'Work Event'),
       optionLabel('device_status', 'odor removal'),
       entityName('reset_bagbox', 'Reset Bag Counter'),
+      entityName('home_mode', 'Privacy Mode'),
+      entityName('camera_inward', 'Camera Inward in Privacy Mode'),
+      entityName('camera_off', 'Camera Off in Privacy Mode'),
+      entityName('no_sound', 'Microphone Off in Privacy Mode'),
+      entityName('camera_position', 'Camera Position'),
     ];
   });
   assert.deepEqual(names, [
@@ -52,7 +57,30 @@ const assert = require('node:assert/strict');
     '工作事件',
     '除臭中',
     '重置垃圾袋计数',
+    '居家模式',
+    '居家模式下摄像头朝内',
+    '居家模式下关闭摄像头',
+    '居家模式下关闭麦克风',
+    '摄像头位置（原始值，含义未验证）',
   ]);
+  // An unset privacy-mode switch says it is unknown, and toggling it still
+  // sends the ordinary entity write with the original key.
+  const unset = await page.evaluate(async () => {
+    const { controlRow } = await import('/js/entities.js');
+    const host = document.createElement('div');
+    host.innerHTML =
+      controlRow(123, { component: 'switch', key: 'camera_inward', name: 'x', value: null }) +
+      controlRow(123, { component: 'switch', key: 'camera', name: 'Camera', value: 0 });
+    document.body.appendChild(host);
+    const labels = [...host.querySelectorAll('label')].map(l => l.textContent.trim());
+    return { labels, checked: host.querySelector('input').checked };
+  });
+  assert.equal(unset.labels[0], '居家模式下摄像头朝内 （未知）');
+  assert.equal(unset.labels[1], '摄像头');
+  assert.equal(unset.checked, false);
+  await page.locator('input[data-key="camera_inward"]').check();
+  await page.waitForTimeout(200);
+  assert.deepEqual(posted[posted.length - 1], { entity: 'camera_inward', value: 'ON' });
   const escaped = await page.evaluate(async () => {
     const { controlRow } = await import('/js/entities.js');
     const unsafe = '<img src=x onerror=alert(1)>';

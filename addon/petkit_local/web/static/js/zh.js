@@ -90,6 +90,11 @@ const ENTITY_NAMES = {
   pack_waste: '打包垃圾',
   open_sealed_door: '打开密封门',
   reset_bagbox: '重置垃圾袋计数',
+  home_mode: '居家模式',
+  camera_inward: '居家模式下摄像头朝内',
+  camera_off: '居家模式下关闭摄像头',
+  no_sound: '居家模式下关闭麦克风',
+  camera_position: '摄像头位置（原始值，含义未验证）',
   cleaning_schedule: '清理计划（JSON）',
 };
 

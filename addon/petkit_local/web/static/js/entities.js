@@ -80,7 +80,11 @@ function controlRow(id, e, kind) {
   const nm = esc(entityName(e.key, e.name)) + (ENTITY_HELP[e.key] ? help(ENTITY_HELP[e.key]) : '');
   if (e.component === 'switch') {
     const on = e.value === 1 || e.value === true || e.value === '1';
-    return `<label class="ctrl"><span>${nm}</span>
+    // A setting nobody has set and the device has not reported is unknown, not
+    // off: several are deliberately never seeded (a seed would be pushed to the
+    // device), and an unchecked box alone would claim a state nobody chose.
+    const unknown = e.value === null || e.value === undefined;
+    return `<label class="ctrl"><span>${nm}${unknown ? ' <span class="mut">（未知）</span>' : ''}</span>
       <span class="sw"><input type="checkbox" ${on ? 'checked' : ''} data-change="set-entity-switch" data-id="${esc(id)}" data-key="${esc(e.key)}"${k}><span class="sl"></span></span></label>`;
   }
   if (e.component === 'number') {
