@@ -1,6 +1,7 @@
 import { BASE, api, esc } from './core.js';
 import { onAction, onChange } from './delegate.js';
 import { mediaThumbs, observeLazyVideos, _has } from './media.js';
+import { eventLabel } from './zh.js';
 
 // ---------------- Timeline ----------------
 let TL_DATE = null,
@@ -132,14 +133,14 @@ function reconcile(container, items) {
 // cleaning used to have no chip, so a feeder's and a fountain's cards belonged
 // to no filter at all — visible under "All" and unreachable from anywhere else.
 const TL_FILTERS = [
-  ['all', 'All'],
-  ['pet', 'Pet'],
-  ['toileting', 'Toileting'],
-  ['feeding', 'Feeding'],
-  ['drinking', 'Drinking'],
-  ['cleaning', 'Cleaning'],
-  ['health_alert', 'Health Alert'],
-  ['fault', 'Faults'],
+  ['all', '全部'],
+  ['pet', '宠物'],
+  ['toileting', '如厕'],
+  ['feeding', '喂食'],
+  ['drinking', '饮水'],
+  ['cleaning', '清理'],
+  ['health_alert', '健康提醒'],
+  ['fault', '故障'],
 ];
 
 // Which chips are worth the width. A device family that produced nothing today
@@ -157,7 +158,7 @@ function controlsHtml(ds, pets, counts) {
       <input type="date" id="tlDate" value="${esc(TL_DATE)}" data-change="tl-date" style="width:auto">
       <button class="ghost act" id="tlNext" data-action="tl-shift" data-n="1">▸</button>
       <select id="tlDevice" data-change="tl-device" style="width:auto">
-        <option value="">All devices</option>
+        <option value="">所有设备</option>
         ${ds.map(d => `<option value="${esc(d.id)}">${esc(d.name)} #${esc(d.id)}</option>`).join('')}
       </select>
       <span class="grow"></span>
@@ -165,8 +166,8 @@ function controlsHtml(ds, pets, counts) {
     ${
       pets.length
         ? `<div class="row tl-filterbar" style="align-items:center">
-      <div class="chips" role="group" aria-label="Filter by pet">
-        <button class="chip-btn" data-action="tl-pet" data-k="">All pets</button>
+      <div class="chips" role="group" aria-label="按宠物筛选">
+        <button class="chip-btn" data-action="tl-pet" data-k="">所有宠物</button>
         ${pets.map(petChip).join('')}
       </div>
       <span class="grow"></span>
@@ -183,7 +184,7 @@ function controlsHtml(ds, pets, counts) {
           .join('')}
       </div>
       <span class="grow"></span>
-      <label class="mut tl-dbgtog"><input type="checkbox" data-change="tl-debug"> Debug info</label>
+      <label class="mut tl-dbgtog"><input type="checkbox" data-change="tl-debug"> 调试信息</label>
     </div>
   </div>`;
 }
@@ -262,7 +263,7 @@ async function loadTimeline() {
     : [
         {
           key: 'empty',
-          html: '<div class="card"><p class="mut">No activity on this day.</p></div>',
+          html: '<div class="card"><p class="mut">当天没有活动记录。</p></div>',
         },
       ];
   reconcile(list, items);
@@ -308,16 +309,16 @@ onAction('tl-dbg', el => toggleDebug(Number(el.dataset.id)));
 
 // Keyed by event_kind (NOT s.kind) — the chip is the thing the card is about.
 const KIND_TAG = {
-  toilet_visit: 'Toilet',
-  pet: 'Appeared',
-  motion: 'Motion',
-  cleaning: 'Cleaning',
-  error: 'Alert',
-  feeding: 'Feeding',
+  toilet_visit: '如厕',
+  pet: '宠物出现',
+  motion: '移动',
+  cleaning: '清理',
+  error: '提醒',
+  feeding: '喂食',
   // A fountain's kinds. Without these the chip rendered the raw lowercase
   // string, so every W7H row was the one card on the page not in title case.
-  drinking: 'Drinking',
-  system: 'System',
+  drinking: '饮水',
+  system: '系统',
 };
 const KIND_CLASS = { toilet_visit: 'visit', pet: 'pet', motion: 'pet', error: 'error' };
 function hhmmss(ts) {
@@ -372,7 +373,7 @@ async function toggleDebug(id) {
     box.innerHTML = dbgBody(TL_DBG_CACHE.get(id));
     return;
   }
-  box.innerHTML = '<p class="mut">loading…</p>';
+  box.innerHTML = '<p class="mut">加载中…</p>';
   const d = await api('timeline/' + id);
   TL_DBG_CACHE.set(id, d);
   // The whole view may have been re-rendered while the request was in flight,
@@ -402,7 +403,7 @@ function fieldText(f) {
 }
 
 function dbgBody(d) {
-  if (!d) return '<p class="mut">loading…</p>';
+  if (!d) return '<p class="mut">加载中…</p>';
   if (d.error) return `<p class="mut">${esc(d.error)}</p>`;
   const e = d.event || {},
     c = d.code;
@@ -442,22 +443,20 @@ function dbgBody(d) {
 
   const codeBlock = c
     ? `<table class="tl-dbgt">
-      <tr><td>Means</td><td colspan="2"><b>${esc(c.label)}</b></td><td>${dbgGrade(c.grade)}</td></tr>
-      ${c.firmware ? `<tr><td>Firmware</td><td colspan="3"><code>${esc(c.firmware)}</code></td></tr>` : ''}
+      <tr><td>含义</td><td colspan="2"><b>${esc(eventLabel(c.label))}</b></td><td>${dbgGrade(c.grade)}</td></tr>
+      ${c.firmware ? `<tr><td>固件</td><td colspan="3"><code>${esc(c.firmware)}</code></td></tr>` : ''}
       ${c.note ? `<tr class="tl-note"><td></td><td colspan="3" class="mut">${esc(c.note)}</td></tr>` : ''}
     </table>`
-    : '<p class="mut">This code is in no table yet — it will read as a bare "Event N".</p>';
+    : '<p class="mut">此代码尚未收录，将显示为原始事件编号。</p>';
 
   return `<div class="tl-dbgin">
-    <h4>What this code means</h4>${codeBlock}
-    <h4>Decoded payload</h4>${
-      decoded
-        ? `<table class="tl-dbgt">${decoded}</table>`
-        : '<p class="mut">The device sent no content.</p>'
+    <h4>代码含义</h4>${codeBlock}
+    <h4>解析后的数据</h4>${
+      decoded ? `<table class="tl-dbgt">${decoded}</table>` : '<p class="mut">设备未发送内容。</p>'
     }
-    <h4>Event record</h4><table class="tl-dbgt">${meta}</table>
-    <details class="adv"><summary>Raw content JSON</summary><pre>${esc(JSON.stringify(d.content || {}, null, 2))}</pre></details>
-    <details class="adv"><summary>Raw state snapshot</summary><pre>${esc(JSON.stringify(d.state || {}, null, 2))}</pre></details>
+    <h4>事件记录</h4><table class="tl-dbgt">${meta}</table>
+    <details class="adv"><summary>原始内容 JSON</summary><pre>${esc(JSON.stringify(d.content || {}, null, 2))}</pre></details>
+    <details class="adv"><summary>原始状态快照</summary><pre>${esc(JSON.stringify(d.state || {}, null, 2))}</pre></details>
   </div>`;
 }
 
@@ -474,8 +473,8 @@ function sessionCard(s) {
   // this visit was. Anything less certain than these stays behind Debug.
   const facts = [];
   if (s.kind === 'visit') {
-    if (s.duration_sec != null) facts.push(`spent <b>${Math.round(s.duration_sec)}s</b>`);
-    if (s.weight != null) facts.push(`weighed <b>${(s.weight / 1000).toFixed(2)} kg</b>`);
+    if (s.duration_sec != null) facts.push(`耗时 <b>${Math.round(s.duration_sec)} 秒</b>`);
+    if (s.weight != null) facts.push(`体重 <b>${(s.weight / 1000).toFixed(2)} kg</b>`);
   }
   for (const b of s.bits || []) {
     // "waste 42 g" / "litter 40%" / "yowled 12s" — bold from the first digit,
@@ -488,10 +487,11 @@ function sessionCard(s) {
 
   let title;
   if (s.kind === 'visit') {
-    title = factsHtml || '<span class="mut">toilet visit</span>';
+    title = factsHtml || '<span class="mut">如厕</span>';
   } else {
     title =
-      `<span class="mut">${esc(s.label || tag)}</span>` + (factsHtml ? ' · ' + factsHtml : '');
+      `<span class="mut">${esc(eventLabel(s.label || tag))}</span>` +
+      (factsHtml ? ' · ' + factsHtml : '');
   }
   // Who the device's NPU recognised. Absent when it recognised nobody, which
   // is normal for a passing glance — most "appeared" episodes have no match.
@@ -506,8 +506,8 @@ function sessionCard(s) {
   return `<div class="card tl-card">
     ${TL_MULTIDEV ? `<span class="tl-dev">${esc(s.device_name || '')}</span>` : ''}
     ${tlRow(s.display_ts ?? s.ts, head, s.media, true, s.id)}
-    ${primary.map(e => tlRow(e.ts, esc(e.label || e.event_type || ''), e.media, false, e.id)).join('')}
-    ${detail.length ? `<details class="tl-more"><summary>show ${detail.length} more step${detail.length > 1 ? 's' : ''}</summary>${detail.map(e => tlRow(e.ts, esc(e.label || e.event_type || ''), e.media, false, e.id)).join('')}</details>` : ''}
+    ${primary.map(e => tlRow(e.ts, esc(eventLabel(e.label || e.event_type || '')), e.media, false, e.id)).join('')}
+    ${detail.length ? `<details class="tl-more"><summary>显示其余 ${detail.length} 个步骤</summary>${detail.map(e => tlRow(e.ts, esc(eventLabel(e.label || e.event_type || '')), e.media, false, e.id)).join('')}</details>` : ''}
   </div>`;
 }
 

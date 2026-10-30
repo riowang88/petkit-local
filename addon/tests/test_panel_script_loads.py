@@ -102,7 +102,7 @@ const cases = [
 ];
 for (const [label, hasBt, secure] of cases) {
   const {card, tooltip} = provisionWarning(hasBt, secure);
-  if (secure === false && !/secure page/.test(card))
+  if (secure === false && !/安全页面/.test(card))
     throw new Error(label + ': insecure page did not produce the HTTPS warning: ' + card);
 }
 const chromeOnHttps = provisionWarning(false, true);

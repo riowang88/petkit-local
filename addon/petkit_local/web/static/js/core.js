@@ -39,13 +39,13 @@ const ESC_MAP = {
 const esc = s => (s == null ? '' : String(s)).replace(/[&<>"'\/]/g, c => ESC_MAP[c]);
 const fmtTs = t => (t ? new Date(t * 1000).toLocaleTimeString() : '—');
 function relTime(t) {
-  if (!t) return 'never';
+  if (!t) return '从未';
   const s = Math.max(0, Math.floor(Date.now() / 1000 - t));
-  if (s < 2) return 'just now';
-  if (s < 60) return s + 's ago';
-  if (s < 3600) return Math.floor(s / 60) + 'm ago';
-  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-  return Math.floor(s / 86400) + 'd ago';
+  if (s < 2) return '刚刚';
+  if (s < 60) return s + ' 秒前';
+  if (s < 3600) return Math.floor(s / 60) + ' 分钟前';
+  if (s < 86400) return Math.floor(s / 3600) + ' 小时前';
+  return Math.floor(s / 86400) + ' 天前';
 }
 function fmtBytes(n) {
   if (n == null) return '—';
@@ -62,8 +62,8 @@ function copyText(text) {
   if (!text) return;
   if (navigator.clipboard && window.isSecureContext) {
     navigator.clipboard.writeText(text).then(
-      () => toast('Copied'),
-      () => toast('Could not copy — select it by hand'),
+      () => toast('已复制'),
+      () => toast('无法复制，请手动选择'),
     );
     return;
   }
@@ -80,7 +80,7 @@ function copyText(text) {
     ok = false;
   }
   document.body.removeChild(ta);
-  toast(ok ? 'Copied' : 'Could not copy — select it by hand');
+  toast(ok ? '已复制' : '无法复制，请手动选择');
 }
 
 function toast(msg) {

@@ -2,6 +2,7 @@ import { esc } from './core.js';
 import { onInput } from './delegate.js';
 import { fmtEntityValue } from './format.js';
 import { help } from './help.js';
+import { entityName, optionLabel } from './zh.js';
 
 //: Device ids whose State card is showing every entity rather than just the
 //: sensors. Not persisted: it is a "let me check something" mode, and coming
@@ -17,7 +18,7 @@ function entityTable(d, sensors) {
   const rows = all ? d.entities || [] : sensors;
   return `<table class="stbl"><tbody>${rows
     .map(
-      e => `<tr><td>${esc(e.name)}</td>
+      e => `<tr><td>${esc(entityName(e.key, e.name))}</td>
       <td>${fmtEntityValue(e)}</td>
       <td class="mut">${all ? `${esc(e.component)}<br>` : ''}<code>${esc(e.value_path || e.key)}</code></td></tr>`,
     )
@@ -37,11 +38,9 @@ function entityTable(d, sensors) {
 //: row is the same wall of text with extra clicks.
 const ENTITY_HELP = {
   yowling_detection:
-    "Listens for meowing while a cat is in the box and records when it heard some. PetKit frames repeated yowling as a possible sign of discomfort — it is a health signal, not a novelty. Beta in PetKit's app.",
-  ph_detection:
-    "Reads the colour of PetKit's own pH-indicator litter from the camera. With ordinary litter it measures nothing at all. Beta in PetKit's app.",
-  vomit_detection:
-    'Watches for vomiting. A detection result carries a `vomit_info` list, which stays empty while this is off.',
+    '检测猫在猫砂盆内的叫声并记录。PETKIT 将持续叫声视为可能不适的信号；原厂 App 中为测试功能。',
+  ph_detection: '通过摄像头读取 PETKIT 指示猫砂的颜色；普通猫砂无法测量。原厂 App 中为测试功能。',
+  vomit_detection: '检测呕吐事件。关闭时，检测结果中的 `vomit_info` 列表保持为空。',
 };
 
 //: Values typed into a number control but not yet sent, keyed "<id>:<key>".
@@ -78,7 +77,7 @@ function secondsToClock(v) {
 
 function controlRow(id, e, kind) {
   const k = kind ? ` data-kind="${esc(kind)}"` : '';
-  const nm = esc(e.name) + (ENTITY_HELP[e.key] ? help(ENTITY_HELP[e.key]) : '');
+  const nm = esc(entityName(e.key, e.name)) + (ENTITY_HELP[e.key] ? help(ENTITY_HELP[e.key]) : '');
   if (e.component === 'switch') {
     const on = e.value === 1 || e.value === true || e.value === '1';
     return `<label class="ctrl"><span>${nm}</span>
@@ -100,7 +99,7 @@ function controlRow(id, e, kind) {
     return `<label class="ctrl"><span>${nm}${range}</span>
       <span class="cn"><input type="number" class="${pending !== undefined ? 'dirty' : ''}" value="${esc(shown)}" min="${esc(e.min)}" max="${esc(e.max)}" step="${esc(e.step)}"
         data-input="entity-number" data-id="${esc(id)}" data-key="${esc(e.key)}" data-device-value="${esc(e.value ?? '')}">
-      <button class="mini" data-action="set-entity-number" data-id="${esc(id)}" data-key="${esc(e.key)}"${k}>Set</button></span></label>`;
+      <button class="mini" data-action="set-entity-number" data-id="${esc(id)}" data-key="${esc(e.key)}"${k}>设置</button></span></label>`;
   }
   if (e.component === 'time') {
     // The device stores seconds since midnight; the control shows a clock. Same
@@ -116,7 +115,7 @@ function controlRow(id, e, kind) {
     return `<label class="ctrl"><span>${nm}</span>
       <span class="cn"><input type="time" step="${esc(e.step || 60)}" class="${pending !== undefined ? 'dirty' : ''}" value="${esc(shown)}"
         data-input="entity-number" data-id="${esc(id)}" data-key="${esc(e.key)}" data-device-value="${esc(device)}">
-      <button class="mini" data-action="set-entity-time" data-id="${esc(id)}" data-key="${esc(e.key)}"${k}>Set</button></span></label>`;
+      <button class="mini" data-action="set-entity-time" data-id="${esc(id)}" data-key="${esc(e.key)}"${k}>设置</button></span></label>`;
   }
   // select — device value maps to an option via option_values, or by bare
   // index when an entity declares none (ha/discovery.py::_select_value_template
@@ -127,7 +126,10 @@ function controlRow(id, e, kind) {
       : (e.options || []).map((_, idx) => idx);
   const sel = values.findIndex(v => String(v) === String(e.value));
   const opts = (e.options || [])
-    .map((o, idx) => `<option ${idx === sel ? 'selected' : ''}>${esc(o)}</option>`)
+    .map(
+      (o, idx) =>
+        `<option value="${esc(o)}" ${idx === sel ? 'selected' : ''}>${esc(optionLabel(e.key, o))}</option>`,
+    )
     .join('');
   return `<label class="ctrl"><span>${nm}</span>
     <span class="cn"><select data-change="set-entity-select" data-id="${esc(id)}" data-key="${esc(e.key)}"${k}>${opts}</select></span></label>`;

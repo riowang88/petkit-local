@@ -221,8 +221,8 @@ def test_esp32_provisioning_warns_when_api_url_is_not_port_80():
       }));
     """)
     assert out["port80"] == ""
-    assert "port <b>80</b>" in out["port8080"]
-    assert "port <b>80</b>" in out["https"]
+    assert "使用 <b>80</b> 端口" in out["port8080"]
+    assert "使用 <b>80</b> 端口" in out["https"]
 
 
 def test_a_blufi_level_failure_is_named_rather_than_numbered():

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head>
+<html lang="zh-CN"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PetKit Local</title>
 <link rel="stylesheet" href="static/styles.css?v={{ asset_version }}">
@@ -7,64 +7,64 @@
 <body>
 <header>
   <h1>🐾 <span class="full">PetKit Local</span></h1>
-  <nav role="tablist" aria-label="Panel sections">
-    <button data-tab="devices" role="tab" aria-selected="true" aria-controls="tab-devices" class="on">Devices</button>
-    <button data-tab="timeline" role="tab" aria-selected="false" aria-controls="tab-timeline">Timeline</button>
-    <button data-tab="pets" role="tab" aria-selected="false" aria-controls="tab-pets">AI / Pets</button>
-    <button data-tab="provision" role="tab" aria-selected="false" aria-controls="tab-provision">Provision</button>
-    <button data-tab="log" role="tab" aria-selected="false" aria-controls="tab-log">Log</button>
-    <button data-tab="capture" role="tab" aria-selected="false" aria-controls="tab-capture">Capture</button>
-    <button data-tab="patchers" role="tab" aria-selected="false" aria-controls="tab-patchers">Patchers</button>
-    <button data-tab="setup" role="tab" aria-selected="false" aria-controls="tab-setup">Setup</button>
+  <nav role="tablist" aria-label="面板栏目">
+    <button data-tab="devices" role="tab" aria-selected="true" aria-controls="tab-devices" class="on">设备</button>
+    <button data-tab="timeline" role="tab" aria-selected="false" aria-controls="tab-timeline">时间线</button>
+    <button data-tab="pets" role="tab" aria-selected="false" aria-controls="tab-pets">AI / 宠物</button>
+    <button data-tab="provision" role="tab" aria-selected="false" aria-controls="tab-provision">蓝牙配网</button>
+    <button data-tab="log" role="tab" aria-selected="false" aria-controls="tab-log">日志</button>
+    <button data-tab="capture" role="tab" aria-selected="false" aria-controls="tab-capture">流量记录</button>
+    <button data-tab="patchers" role="tab" aria-selected="false" aria-controls="tab-patchers">设备补丁</button>
+    <button data-tab="setup" role="tab" aria-selected="false" aria-controls="tab-setup">设置</button>
   </nav>
   <span class="grow"></span>
   <span id="wsState" class="pill">…</span>
 </header>
 <main>
   <section id="tab-devices" role="tabpanel">
-    <div id="devPanels"><div class="empty mut">Loading…</div></div>
+    <div id="devPanels"><div class="empty mut">加载中…</div></div>
   </section>
   <section id="tab-timeline" role="tabpanel" class="hidden"><div id="timelineView">…</div></section>
   <section id="tab-pets" role="tabpanel" class="hidden"><div id="petsView">…</div></section>
   <section id="tab-log" role="tabpanel" class="hidden">
     <div class="card">
       <div class="row head">
-        <h3>Live traffic</h3>
-        <label class="mut"><input type="checkbox" id="hideHb" checked> hide heartbeats</label>
-        <label class="mut"><input type="checkbox" id="autoscroll" checked> autoscroll</label>
+        <h3>实时通信日志</h3>
+        <label class="mut"><input type="checkbox" id="hideHb" checked> 隐藏心跳</label>
+        <label class="mut"><input type="checkbox" id="autoscroll" checked> 自动滚动</label>
         <span class="grow"></span>
         <span id="logCount" class="mut"></span>
-        <button class="act" data-action="download-log">download</button>
-        <button class="act danger" data-action="clear-log">clear</button>
+        <button class="act" data-action="download-log">下载</button>
+        <button class="act danger" data-action="clear-log">清除</button>
       </div>
       <div id="logView" class="log pane"></div>
     </div>
     <div class="card devlog">
       <div class="row head">
-        <h3>Device logs</h3>
+        <h3>设备日志</h3>
         <select id="devLogPick" data-change="devlog-pick"></select>
-        <input id="devLogGrep" placeholder="grep…" data-input="devlog-grep" autocomplete="off" spellcheck="false">
+        <input id="devLogGrep" placeholder="搜索日志…" data-input="devlog-grep" autocomplete="off" spellcheck="false">
         <span class="grow"></span>
         <span id="devLogCount" class="mut"></span>
-        <a id="devLogDl" class="act" style="display:none">download</a>
+        <a id="devLogDl" class="act" style="display:none">下载</a>
       </div>
-      <p class="sub">The device's own <code>devRun.log</code>, uploaded here instead of to PetKit. Off until you turn on <b>Collect debug logs</b> on a device, and the device decides when to send one.</p>
+      <p class="sub">设备上传到此处的 <code>devRun.log</code>。需在设备上启用<b>收集调试日志</b>，具体上传时间由设备决定。</p>
       <div id="devLogView" class="log pane"></div>
     </div>
   </section>
   <section id="tab-provision" role="tabpanel" class="hidden">
     <div id="provWarn" class="card notice" style="display:none"></div>
     <div id="provForm" class="card">
-      <h3>Provision a device over Bluetooth</h3>
-      <p class="sub">Put the PetKit device in pairing mode (hold the WiFi/reset button until it advertises), then fill in your WiFi and provision. The device will join your WiFi and call this app.</p>
+      <h3>通过蓝牙配置设备</h3>
+      <p class="sub">将 PetKit 设备设为配网状态，填写 Wi-Fi 信息后开始配网。设备将连接 Wi-Fi 并访问此服务。</p>
       <div class="row">
-        <div class="col"><label class="mut">WiFi SSID<button class="help" type="button" data-action="help" data-help="The network the DEVICE will join — not necessarily the one this browser is on. It is sent to the device over Bluetooth and never leaves your network.">?</button></label><input id="p-ssid" autocomplete="off"></div>
-        <div class="col"><label class="mut">WiFi password<button class="help" type="button" data-action="help" data-help="Required: an open network cannot be provisioned this way. The password goes straight from this page to the device over Bluetooth — it is not sent to this app or to PetKit.">?</button></label><input id="p-pass" type="password" autocomplete="off"></div>
+        <div class="col"><label class="mut">Wi-Fi 名称<button class="help" type="button" data-action="help" data-help="设备将连接的网络，未必与浏览器当前网络相同。信息通过蓝牙发送到设备。">?</button></label><input id="p-ssid" autocomplete="off"></div>
+        <div class="col"><label class="mut">Wi-Fi 密码<button class="help" type="button" data-action="help" data-help="必须填写密码；此方式不支持开放网络。密码通过蓝牙从此页面发送到设备，不发送给本地服务或 PETKIT。">?</button></label><input id="p-pass" type="password" autocomplete="off"></div>
       </div>
-      <label class="mut field-label">apiServers URL<button class="help" type="button" data-action="help" data-help="The address the device will call instead of PetKit's cloud. It is burned in at provisioning, so use an IP or a name the device itself can resolve — most PetKit hardware cannot resolve .local mDNS names.">?</button></label><input id="p-server">
-      <label class="mut field-label">Timezone<button class="help" type="button" data-action="help" data-help="The device has no clock settings of its own. It takes a fixed UTC offset from this payload and never adjusts for daylight saving, so one provisioned without it stamps UTC onto its video. Changing it means provisioning again. The entry marked 'detected' is your browser's current offset.">?</button></label>
+      <label class="mut field-label">设备服务器地址<button class="help" type="button" data-action="help" data-help="设备将访问此地址而非 PETKIT 云端。配网时会写入设备；请使用设备能解析的 IP 或名称，多数设备无法解析 .local 名称。">?</button></label><input id="p-server">
+      <label class="mut field-label">时区<button class="help" type="button" data-action="help" data-help="设备使用此处提供的固定 UTC 偏移，不会自动调整夏令时；不设置时视频可能显示 UTC。标有“已检测”的选项是浏览器当前偏移。">?</button></label>
       <select id="p-tz"></select>
-      <div class="form-actions"><button id="p-btn" class="act" data-action="provision">Provision via Bluetooth</button>
+      <div class="form-actions"><button id="p-btn" class="act" data-action="provision">通过蓝牙配网</button>
         <span id="p-status" class="mut"></span></div>
       <pre id="p-log" style="display:none"></pre>
     </div>

@@ -19,15 +19,15 @@ import { help } from './help.js';
 // Timeline renders, so they are the categories most likely to be the ones
 // filling a disk, and they had no control at all while two internal caches did.
 const RETENTION_LABELS = {
-  fullVideo: 'Recordings',
-  eventImage: 'Snapshots',
-  highLight: 'Highlights',
-  dynamicVideo: 'Motion Clips',
-  cloudDouble: 'Timelapses',
-  wasteCheck: 'Waste photos',
-  healthPic: 'Health photos',
-  deviceLog: 'Device logs',
-  thumbnail: 'Thumbnail cache',
+  fullVideo: '录像',
+  eventImage: '照片',
+  highLight: '精彩片段',
+  dynamicVideo: '动态片段',
+  cloudDouble: '延时录像',
+  wasteCheck: '排泄物照片',
+  healthPic: '健康照片',
+  deviceLog: '设备日志',
+  thumbnail: '缩略图缓存',
 };
 function numOrNull(id) {
   const v = document.getElementById(id).value;
@@ -47,7 +47,7 @@ async function saveRetention() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  toast(r.ok ? 'Retention saved' : 'Error: ' + (r.error || 'failed'));
+  toast(r.ok ? '保留设置已保存' : '错误：' + (r.error || 'failed'));
 }
 
 // The proxy guards stay VISIBLE but disabled while proxy mode is off: hiding
@@ -81,71 +81,71 @@ async function loadSetup() {
   const sel = presets.some(u => u.key === current) ? current : CUSTOM_UPSTREAM;
 
   v.innerHTML = `
-  <div class="card"><h3>Settings${help(
-    'Proxy mode and capture live here and nowhere else — they are not configuration options. Both apply immediately and survive a restart.',
-  )}${w ? '' : ' <span class="badge warn">read-only — running outside Home Assistant</span>'}</h3>
+  <div class="card"><h3>设置${help(
+    '代理模式和流量记录只在此处配置，修改立即生效并在重启后保留。',
+  )}${w ? '' : ' <span class="badge warn">只读 — 当前不在 Home Assistant 内运行</span>'}</h3>
     <div class="ctrls">
-      <label class="ctrl"><span>Proxy mode<br><span class="mut" style="font-size:11px">forward every device request to the real PetKit cloud and answer with its reply</span></span>${sw('proxy_mode', s.proxy_mode)}</label>
-      <label class="ctrl"><span>Traffic capture<br><span class="mut" style="font-size:11px">record HTTP + MQTT to JSONL (see Capture tab)</span></span>${sw('capture', s.capture)}</label>
+      <label class="ctrl"><span>代理模式<br><span class="mut" style="font-size:11px">将设备请求转发到 PETKIT 云端，并使用云端回复</span></span>${sw('proxy_mode', s.proxy_mode)}</label>
+      <label class="ctrl"><span>流量记录<br><span class="mut" style="font-size:11px">将 HTTP 和 MQTT 记录为 JSONL（见流量记录栏目）</span></span>${sw('capture', s.capture)}</label>
     </div>
     ${
       on
-        ? `<div style="margin-top:14px"><label class="mut">Upstream server</label>
+        ? `<div style="margin-top:14px"><label class="mut">上游服务器</label>
       <span class="cn" style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
         <select id="proxyUpSel" ${w ? '' : 'disabled'} data-change="save-upstream">
           ${presets.map(u => `<option value="${esc(u.key)}" ${sel === u.key ? 'selected' : ''}>${esc(u.key)} — ${esc(u.url)}</option>`).join('')}
-          <option value="${CUSTOM_UPSTREAM}" ${sel === CUSTOM_UPSTREAM ? 'selected' : ''}>custom…</option>
+          <option value="${CUSTOM_UPSTREAM}" ${sel === CUSTOM_UPSTREAM ? 'selected' : ''}>自定义…</option>
         </select>
       </span>
       ${
         sel === CUSTOM_UPSTREAM
           ? `<span class="cn" style="display:flex;gap:6px;margin-top:6px">
         <input id="proxyUp" value="${esc(s.proxy_upstream)}" ${w ? '' : 'disabled'} placeholder="https://api-eu.petkt.com/6/">
-        <button class="mini" ${w ? '' : 'disabled'} data-action="save-proxy-upstream">Set</button></span>`
+        <button class="mini" ${w ? '' : 'disabled'} data-action="save-proxy-upstream">设置</button></span>`
           : ''
       }
-      <label class="mut" style="display:block;margin-top:10px">DNS for upstream lookups${help(
+      <label class="mut" style="display:block;margin-top:10px">上游查询 DNS${help(
         'Only used to find the server above. Leave empty unless your router or Pi-hole points PetKit’s names at this app — then it would point them here for us too, and proxy mode would reach itself instead of the cloud.',
       )}</label>
       <span class="cn" style="display:flex;gap:6px;margin-top:4px">
         <input id="proxyDns" value="${esc(s.proxy_dns || '')}" ${w ? '' : 'disabled'} placeholder="empty = system resolver">
-        <button class="mini" ${w ? '' : 'disabled'} data-action="save-proxy-dns">Set</button></span>
+        <button class="mini" ${w ? '' : 'disabled'} data-action="save-proxy-dns">设置</button></span>
     </div>`
         : ''
     }
-    <p class="sub" style="margin-top:14px">${on ? 'Removed from the cloud’s replies:' : 'Guards for proxy mode — inactive until it is on.'}</p>
+    <p class="sub" style="margin-top:14px">${on ? '从云端回复中移除：' : '代理模式防护：开启代理后才会生效。'}</p>
     <div class="ctrls">
-      ${guard('proxy_block_run_cmd', 'proxy_block_run_cmd' in s ? s.proxy_block_run_cmd : true, 'Block run_cmd <span class="badge warn">RCE guard</span>', 'strip shell commands the cloud tries to run on the device')}
-      ${guard('proxy_block_ota', 'proxy_block_ota' in s ? s.proxy_block_ota : true, 'Block OTA push <span class="badge warn">firmware guard</span>', 'answer the OTA endpoints locally; drop firmware images found elsewhere')}
-      ${guard('proxy_block_log_upload', 'proxy_block_log_upload' in s ? s.proxy_block_log_upload : true, 'Block log upload <span class="badge warn">privacy</span>', 'withhold the token the device needs to send its debug log to PetKit')}
-      ${guard('proxy_mqtt_bridge', 'proxy_mqtt_bridge' in s ? s.proxy_mqtt_bridge : true, 'Upstream MQTT bridge', 'also bridge the device’s MQTT session to the real Aliyun broker')}
-      ${guard('proxy_media_real_oss', !!s.proxy_media_real_oss, 'Media → real OSS', 'let the device upload recordings to PetKit instead of us — nothing lands locally')}
-      ${guard('proxy_local_cvr_window', !!s.proxy_local_cvr_window, 'Keep recording locally', 'ignore the cloud’s subscription window and tell the camera its storage is active — a lapsed PetKit plan otherwise stops recording with no error anywhere')}
+      ${guard('proxy_block_run_cmd', 'proxy_block_run_cmd' in s ? s.proxy_block_run_cmd : true, '阻止 run_cmd <span class="badge warn">远程命令防护</span>', '移除云端尝试在设备上运行的 shell 命令')}
+      ${guard('proxy_block_ota', 'proxy_block_ota' in s ? s.proxy_block_ota : true, '阻止 OTA 推送 <span class="badge warn">固件防护</span>', '在本地回应 OTA 接口，并丢弃其他位置发现的固件镜像')}
+      ${guard('proxy_block_log_upload', 'proxy_block_log_upload' in s ? s.proxy_block_log_upload : true, '阻止日志上传 <span class="badge warn">隐私防护</span>', '不向设备提供上传调试日志到 PETKIT 所需的令牌')}
+      ${guard('proxy_mqtt_bridge', 'proxy_mqtt_bridge' in s ? s.proxy_mqtt_bridge : true, '上游 MQTT 桥接', '同时将设备 MQTT 会话桥接至真实阿里云服务器')}
+      ${guard('proxy_media_real_oss', !!s.proxy_media_real_oss, '媒体 → 原厂 OSS', '让设备将录像上传到 PETKIT，而不是保存到本地')}
+      ${guard('proxy_local_cvr_window', !!s.proxy_local_cvr_window, '继续在本地录像', '忽略云端订阅时段并告知摄像头存储可用；否则订阅到期可能导致录像停止且不显示错误')}
     </div>
     ${on ? upstreamStatus(i.upstream || {}) : ''}
     ${on ? `<div id="blockedView" style="margin-top:14px"></div>` : ''}
   </div>
-  <div class="card"><h3>Connection <span class="badge">restart to change</span></h3>
-    <p class="sub">Bound at startup — set these in the <b>Configuration</b> tab, then restart.</p>
+  <div class="card"><h3>连接 <span class="badge">修改后需重启</span></h3>
+    <p class="sub">这些项目在启动时确定；请在<b>配置</b>中设置后重启。</p>
     <table><tbody>
-      <tr><td>Version</td><td><code>${esc(i.version || '?')}</code></td><td class="mut">The code actually running. If an update did not take effect this still shows the old number, which is the quickest way to tell a stale build from a real bug.</td></tr>
-      <tr><td>API URL (apiServers)</td><td><code>${esc(i.api_url)}</code></td><td class="mut">The URL a device calls. Most models take it over Bluetooth from the Provision tab; the oldest, which have no Bluetooth setup, need a DNS redirect.</td></tr>
-      <tr><td>MQTT host</td><td><span class="badge ok">automatic</span></td><td class="mut">No global setting — every device is handed our own broker (derived from the API URL host). A patched <code>ctrl</code> connects over MQTT; an unpatched one simply heartbeats over HTTP (it does not crash). Commands fall back to the HTTP heartbeat when there\'s no live MQTT session.</td></tr>
-      <tr><td>MQTT broker port</td><td><code>${esc(i.mqtt_port)}</code>${i.mqtt_tls ? ` · TLS <code>${esc(i.mqtt_tls_port)}</code>` : ''}</td><td class="mut">TLS cert ${i.cert_exists ? '<span class="badge ok">present</span>' : '<span class="badge bad">missing</span>'}${help('The self-signed certificate the broker presents. "missing" means the file named by cert_path is not there, and a device that expects TLS will not connect.')}</td></tr>
-      <tr><td>MQTT auth</td><td>${i.strict_auth ? '<span class="badge warn">strict HMAC</span>' : '<span class="badge">accept-all</span>'}</td><td class="mut">Accept-all is fine for a trusted LAN; strict enforces the Aliyun HMAC-SHA256 sign.</td></tr>
-      <tr><td>Bridge → HA</td><td>${
+      <tr><td>版本</td><td><code>${esc(i.version || '?')}</code></td><td class="mut">当前运行的代码版本。若更新未生效，此处仍会显示旧版本。</td></tr>
+      <tr><td>API URL (apiServers)</td><td><code>${esc(i.api_url)}</code></td><td class="mut">设备访问的服务地址。多数型号通过蓝牙配网写入；不支持蓝牙配网的旧型号需要 DNS 重定向。</td></tr>
+      <tr><td>MQTT 主机</td><td><span class="badge ok">自动</span></td><td class="mut">没有全局设置：设备使用根据 API 地址推导出的本地 MQTT 服务。修改过的 <code>ctrl</code> 可通过 MQTT 连接；未修改的设备使用 HTTP 心跳。MQTT 未连接时命令通过 HTTP 心跳排队。</td></tr>
+      <tr><td>MQTT 服务端口</td><td><code>${esc(i.mqtt_port)}</code>${i.mqtt_tls ? ` · TLS <code>${esc(i.mqtt_tls_port)}</code>` : ''}</td><td class="mut">TLS 证书 ${i.cert_exists ? '<span class="badge ok">存在</span>' : '<span class="badge bad">缺失</span>'}${help('The self-signed certificate the broker presents. "missing" means the file named by cert_path is not there, and a device that expects TLS will not connect.')}</td></tr>
+      <tr><td>MQTT 认证</td><td>${i.strict_auth ? '<span class="badge warn">严格 HMAC</span>' : '<span class="badge">接受所有连接</span>'}</td><td class="mut">接受所有连接仅适合可信局域网；严格模式校验阿里云 HMAC-SHA256 签名。</td></tr>
+      <tr><td>桥接到 HA</td><td>${
         !i.ha_enabled
-          ? '<span class="badge">disabled</span>'
+          ? '<span class="badge">已禁用</span>'
           : i.ha_publishing
-            ? '<span class="badge ok">publishing</span>'
-            : '<span class="badge bad">down</span>'
-      }</td><td class="mut">Whether entities are reaching Home Assistant right now.${help('This is the connection to HOME ASSISTANT\'s broker, not the one your devices talk to — a device can be perfectly healthy while this is down, and vice versa. "disabled" means publishing was switched off (no ha_mqtt_host, or --no-ha), which is a valid way to run.')}</td></tr>
+            ? '<span class="badge ok">发布中</span>'
+            : '<span class="badge bad">未连接</span>'
+      }</td><td class="mut">当前是否正在将设备项目发布到 Home Assistant。${help('This is the connection to HOME ASSISTANT\'s broker, not the one your devices talk to — a device can be perfectly healthy while this is down, and vice versa. "disabled" means publishing was switched off (no ha_mqtt_host, or --no-ha), which is a valid way to run.')}</td></tr>
     </tbody></table>
   </div>
-  <div class="card"><h3>Media Retention${help(
-    'Over the size cap, the oldest files go first; past the age cap they go regardless of size. The sweep runs about every 10 minutes. Leave a field blank for no cap — 0 also means no cap, not "delete everything".',
+  <div class="card"><h3>媒体保留${help(
+    '超过容量时先删除最旧文件；超过保留天数时无论大小都会删除。约每 10 分钟检查一次。留空或填 0 表示不限制，不是删除全部。',
   )}</h3>
-    <table><thead><tr><th></th><th>Max size (MB)</th><th>Max age (days)</th></tr></thead><tbody>
+    <table><thead><tr><th></th><th>最大容量（MB）</th><th>最长保留（天）</th></tr></thead><tbody>
       ${Object.keys(RETENTION_LABELS)
         .map(k => {
           const c = rd[k] || {};
@@ -154,10 +154,10 @@ async function loadSetup() {
         <td><input type="number" id="ret_${k}_days" value="${esc(c.max_days ?? '')}" min="0" style="width:100px"></td></tr>`;
         })
         .join('')}
-      <tr><td>Events (history)</td><td class="mut">—</td><td><input type="number" id="ret_events_days" value="${esc((rd.events || {}).max_days ?? '')}" min="0" style="width:100px"></td></tr>
-      <tr><td>Blocked attempts${help('How long to keep the record of instructions the real cloud sent that we refused. Rows are tiny and rare, so a long window costs almost nothing and is worth having if you ever need to show what happened.')}</td><td class="mut">—</td><td><input type="number" id="ret_blocked_days" value="${esc((rd.blocked || {}).max_days ?? '')}" min="0" style="width:100px"></td></tr>
+      <tr><td>事件（历史）</td><td class="mut">—</td><td><input type="number" id="ret_events_days" value="${esc((rd.events || {}).max_days ?? '')}" min="0" style="width:100px"></td></tr>
+      <tr><td>已拦截的尝试${help('保留原厂云端发送但被拦截的指令记录的天数。')}</td><td class="mut">—</td><td><input type="number" id="ret_blocked_days" value="${esc((rd.blocked || {}).max_days ?? '')}" min="0" style="width:100px"></td></tr>
     </tbody></table>
-    <div style="margin-top:10px"><button class="act" data-action="save-retention">Save retention settings</button></div>
+    <div style="margin-top:10px"><button class="act" data-action="save-retention">保存保留设置</button></div>
   </div>`;
   if (on) loadBlocked(i.redactions || {});
 }
@@ -179,7 +179,7 @@ function renderCustomUpstream() {
     sel.parentElement.insertAdjacentHTML(
       'afterend',
       '<span class="cn" style="display:flex;gap:6px;margin-top:6px"><input id="proxyUp" placeholder="https://api.eu-pet.com/6/">' +
-        '<button class="mini" data-action="save-proxy-upstream">Set</button></span>',
+        '<button class="mini" data-action="save-proxy-upstream">设置</button></span>',
     );
     document.getElementById('proxyUp').focus();
   }
@@ -190,7 +190,7 @@ async function saveSetting(key, value) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ [key]: value }),
   });
-  toast(r.ok ? 'Saved · ' + key : 'Error: ' + (r.error || 'failed'));
+  toast(r.ok ? '已保存 · ' + key : '错误：' + (r.error || 'failed'));
   loadSetup(); // re-render (guards ungrey, the upstream picker appears, …)
 }
 
@@ -224,14 +224,14 @@ function upstreamStatus(counts) {
 // Blocked attempts are the persisted ones only. The routine rewrites — every
 // dev_serverinfo poll substitutes our address — are counters, not rows.
 const REDACT_LABELS = {
-  rce: 'shell command',
-  ota: 'firmware push',
-  secret: 'credential swap',
-  log_upload: 'log upload',
-  server: 'server address',
-  mqtt: 'broker address',
-  oss_sts: 'media upload',
-  locale: 'timezone',
+  rce: 'shell 命令',
+  ota: '固件推送',
+  secret: '凭据替换',
+  log_upload: '日志上传',
+  server: '服务器地址',
+  mqtt: 'MQTT 地址',
+  oss_sts: '媒体上传',
+  locale: '时区',
 };
 async function loadBlocked(counts) {
   const v = document.getElementById('blockedView');
@@ -260,10 +260,10 @@ async function loadBlocked(counts) {
     return;
   }
   v.innerHTML =
-    `<h3 style="margin-top:0">Blocked attempts <span class="badge bad">${esc(rows.length)}</span>${help(
-      'Instructions the real PetKit cloud sent that this app refused to pass on to your device. Kept in the database, so this list outlives a restart.',
+    `<h3 style="margin-top:0">已拦截的尝试 <span class="badge bad">${esc(rows.length)}</span>${help(
+      '原厂 PETKIT 云端发送但本服务拒绝转发给设备的指令；记录会保存在数据库中。',
     )}</h3>
-    <table><thead><tr><th>When</th><th>What</th><th>Endpoint</th><th>Payload</th></tr></thead><tbody>` +
+    <table><thead><tr><th>时间</th><th>类型</th><th>接口</th><th>数据</th></tr></thead><tbody>` +
     rows
       .map(
         b => `<tr><td class="mut">${esc(new Date((b.created_at || 0) * 1000).toLocaleString())}</td>

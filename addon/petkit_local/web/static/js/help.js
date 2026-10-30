@@ -16,7 +16,7 @@ import { onAction } from './delegate.js';
 // innerHTML, which would blow away an inline one mid-read. That does mean the
 // anchor can vanish underneath it, hence the isConnected check while open.
 const help = text =>
-  `<button class="help" type="button" data-action="help" data-help="${esc(text)}" aria-label="What is this?">?</button>`;
+  `<button class="help" type="button" data-action="help" data-help="${esc(text)}" aria-label="这是什么？">?</button>`;
 
 let HELP_ANCHOR = null;
 let HELP_WATCH = 0;

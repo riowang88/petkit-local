@@ -61,7 +61,7 @@ function mediaThumbs(m) {
       : '';
     html += `<div class="tl-thumb"${open}>
       <video class="lazyvid" muted loop playsinline preload="none" data-src="${esc(mediaUrl(autoplay))}" ${poster ? `poster="${esc(poster)}"` : ''}></video>
-      <span class="tl-play">▶</span>${m.video_pending ? '<span class="tl-badge proc">assembling…</span>' : ''}</div>`;
+      <span class="tl-play">▶</span>${m.video_pending ? '<span class="tl-badge proc">合成中…</span>' : ''}</div>`;
   } else if (m.video_pending) {
     // A recording is expected but its chunks haven't been joined yet. Show the
     // still if we have one (badged), else a clear placeholder — never a raw
@@ -70,7 +70,7 @@ function mediaThumbs(m) {
       ? `<div class="tl-thumb" data-action="open-gallery" data-media="${esc(JSON.stringify([m.snapshot_url]))}" data-title="Snapshot">
            <img class="hide-on-error" src="${esc(thumbUrl(m.snapshot_url))}">
            <span class="tl-cap">▶ video processing…</span></div>`
-      : `<div class="tl-thumb tl-ph"><div class="tl-ph-in"><span class="tl-spin"></span>Video processing…</div></div>`;
+      : `<div class="tl-thumb tl-ph"><div class="tl-ph-in"><span class="tl-spin"></span>视频处理中…</div></div>`;
   } else if (m.snapshot_url) {
     html += `<div class="tl-thumb" data-action="open-gallery" data-media="${esc(JSON.stringify([m.snapshot_url]))}" data-title="Snapshot">
       <img class="hide-on-error" src="${esc(thumbUrl(m.snapshot_url))}"></div>`;
@@ -78,12 +78,12 @@ function mediaThumbs(m) {
   if (m.waste && m.waste.length) {
     html += `<div class="tl-thumb small" data-action="open-gallery" data-media="${esc(JSON.stringify(m.waste))}" data-title="Check waste">
       <img class="hide-on-error" src="${esc(thumbUrl(m.waste[0]))}"><span class="tl-badge">${esc(m.waste.length)}</span>
-      <span class="tl-cap">Check waste</span></div>`;
+      <span class="tl-cap">排泄物检查</span></div>`;
   }
   if (m.health && m.health.length) {
     html += `<div class="tl-thumb small" data-action="open-gallery" data-media="${esc(JSON.stringify(m.health))}" data-title="Health">
       <img class="hide-on-error" src="${esc(thumbUrl(m.health[0]))}"><span class="tl-badge">${esc(m.health.length)}</span>
-      <span class="tl-cap">Health</span></div>`;
+      <span class="tl-cap">健康</span></div>`;
   }
   return html;
 }

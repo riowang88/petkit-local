@@ -4,6 +4,7 @@ import { help } from './help.js';
 import { DEV_DETAIL, devPanel, ENTITY_SECTION, scheduleDetail } from './devices.js';
 import { setEntity } from './commands.js';
 import { controlRow } from './entities.js';
+import { entityName, scheduleName } from './zh.js';
 
 onAction('save-schedule', el => {
   const box = el.closest('.sched');
@@ -12,7 +13,7 @@ onAction('save-schedule', el => {
   try {
     JSON.parse(ta.value);
   } catch (e) {
-    return toast('Invalid JSON — not sent');
+    return toast('JSON 格式无效，未发送');
   }
   setEntity(Number(el.dataset.id), el.dataset.key, ta.value);
 });
@@ -45,9 +46,8 @@ const isAllDay = pair => pair[0] === 0 && pair[1] === DAY_END;
 // The same sentence for every empty schedule. "Not set" on its own reads as a
 // gap somebody forgot to fill; the second half is the part that matters — this
 // app sets nothing for you, and unset means unrestricted, not broken.
-const SCHED_EMPTY =
-  '<p class="sub">Not set — nothing here restricts the device. Add a period to change that.</p>';
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const SCHED_EMPTY = '<p class="sub">尚未设置，此处不会限制设备。添加时间段后才会生效。</p>';
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
 const minToClock = m => {
   const n = Number(m);
@@ -106,16 +106,16 @@ function rangeRow(id, target, pair, idx, path) {
   const allDay = isAllDay(pair);
   const dat = ` data-id="${esc(id)}" data-target="${esc(target)}" data-idx="${esc(idx)}" data-path="${esc(path ?? '')}"`;
   const times = allDay
-    ? '<span class="sched-allday">All day</span>'
+    ? '<span class="sched-allday">全天</span>'
     : `<input type="time" value="${esc(minToClock(from))}" data-change="sched-from"${dat}>
        <span class="sched-arrow">→</span>
        <input type="time" value="${esc(minToClock(to))}" data-change="sched-to"${dat}>
-       ${to < from ? '<span class="mut sched-note">next day</span>' : ''}`;
+       ${to < from ? '<span class="mut sched-note">次日</span>' : ''}`;
   return `<div class="sched-row">
     <span class="sched-vals">${times}</span>
     <span class="sched-acts">
-      <button class="link" data-action="sched-toggle-allday"${dat}>${allDay ? 'Pick times' : 'All day'}</button>
-      <button class="link danger" data-action="sched-drop-range"${dat} title="Remove this period" aria-label="Remove this period">✕</button>
+      <button class="link" data-action="sched-toggle-allday"${dat}>${allDay ? '选择时间' : '全天'}</button>
+      <button class="link danger" data-action="sched-drop-range"${dat} title="移除此时间段" aria-label="移除此时间段">✕</button>
     </span>
   </div>`;
 }
@@ -138,27 +138,27 @@ function renderRangesEditor(id, t, value) {
     ? value.map((pair, i) => rangeRow(id, t.target, pair, i)).join('')
     : SCHED_EMPTY;
   return `${rows}
-    <button class="link" data-action="sched-add-range" data-id="${esc(id)}" data-target="${esc(t.target)}">+ Add period</button>`;
+    <button class="link" data-action="sched-add-range" data-id="${esc(id)}" data-target="${esc(t.target)}">+ 添加时间段</button>`;
 }
 
 function renderWeeklyEditor(id, t, value) {
   const dat = ` data-id="${esc(id)}" data-target="${esc(t.target)}"`;
-  const add = `<button class="link"${dat} data-action="sched-add-weekly">+ Add entry</button>`;
+  const add = `<button class="link"${dat} data-action="sched-add-weekly">+ 添加条目</button>`;
   if (!value.length) return `${SCHED_EMPTY}${add}`;
   return `${value
     .map(
       (entry, i) => `<div class="sched-entry">
       <div class="sched-row">
         <span class="sched-vals">
-          <label class="sw-inline"><input type="checkbox" ${entry.enable ? 'checked' : ''} data-change="sched-enable"${dat} data-idx="${esc(i)}"><span>Enabled</span></label>
+          <label class="sw-inline"><input type="checkbox" ${entry.enable ? 'checked' : ''} data-change="sched-enable"${dat} data-idx="${esc(i)}"><span>已启用</span></label>
           ${weekdayBar(id, t.target, entry.rpt, i)}
         </span>
         <span class="sched-acts">
-          <button class="link danger"${dat} data-idx="${esc(i)}" data-action="sched-drop-weekly" title="Remove this entry" aria-label="Remove this entry">✕</button>
+          <button class="link danger"${dat} data-idx="${esc(i)}" data-action="sched-drop-weekly" title="移除此条目" aria-label="移除此条目">✕</button>
         </span>
       </div>
       ${(entry.time || []).map((pair, j) => rangeRow(id, t.target, pair, j, String(i))).join('')}
-      <button class="link"${dat} data-path="${esc(i)}" data-action="sched-add-range">+ Add period</button>
+      <button class="link"${dat} data-path="${esc(i)}" data-action="sched-add-range">+ 添加时间段</button>
     </div>`,
     )
     .join('')}
@@ -172,9 +172,9 @@ function renderWeeklyEditor(id, t, value) {
 function renderFeedEditor(id, t, value) {
   const groups = Array.isArray(value.schedule) ? value.schedule : [];
   const dat = ` data-id="${esc(id)}" data-target="${esc(t.target)}"`;
-  const add = `<button class="link"${dat} data-action="sched-add-feed-group">+ Add days</button>`;
+  const add = `<button class="link"${dat} data-action="sched-add-feed-group">+ 添加日期</button>`;
   if (!groups.length)
-    return `<p class="sub">No meals set — the feeder dispenses only when you press Feed.</p>${add}`;
+    return `<p class="sub">尚未设置喂食计划；喂食器只会在按下喂食时出粮。</p>${add}`;
 
   return `${groups
     .map(
@@ -182,7 +182,7 @@ function renderFeedEditor(id, t, value) {
       <div class="sched-row">
         <span class="sched-vals">${weekdayBar(id, t.target, group.re, gi)}</span>
         <span class="sched-acts">
-          <button class="link danger"${dat} data-idx="${esc(gi)}" data-action="sched-drop-feed-group" title="Remove these days" aria-label="Remove these days">✕</button>
+          <button class="link danger"${dat} data-idx="${esc(gi)}" data-action="sched-drop-feed-group" title="移除这些日期" aria-label="移除这些日期">✕</button>
         </span>
       </div>
       ${
@@ -192,24 +192,24 @@ function renderFeedEditor(id, t, value) {
                 (meal, mi) => `<div class="sched-row">
         <span class="sched-vals">
           <input type="time" value="${esc(secToClock(meal.t))}" data-change="sched-meal-time"${dat} data-path="${esc(gi)}" data-idx="${esc(mi)}">
-          <label class="sw-inline"><span>${t.dual ? 'Hopper 1' : 'Portions'}</span>
+          <label class="sw-inline"><span>${t.dual ? '料仓 1' : '份数'}</span>
             <input type="number" class="sched-portion" min="0" max="255" step="1" value="${esc(meal.a1 ?? 0)}" data-change="sched-meal-a1"${dat} data-path="${esc(gi)}" data-idx="${esc(mi)}"></label>
           ${
             t.dual
-              ? `<label class="sw-inline"><span>Hopper 2</span>
+              ? `<label class="sw-inline"><span>料仓 2</span>
             <input type="number" class="sched-portion" min="0" max="255" step="1" value="${esc(meal.a2 ?? 0)}" data-change="sched-meal-a2"${dat} data-path="${esc(gi)}" data-idx="${esc(mi)}"></label>`
               : ''
           }
         </span>
         <span class="sched-acts">
-          <button class="link danger"${dat} data-path="${esc(gi)}" data-idx="${esc(mi)}" data-action="sched-drop-meal" title="Remove this meal" aria-label="Remove this meal">✕</button>
+          <button class="link danger"${dat} data-path="${esc(gi)}" data-idx="${esc(mi)}" data-action="sched-drop-meal" title="移除此餐" aria-label="移除此餐">✕</button>
         </span>
       </div>`,
               )
               .join('')
-          : '<p class="sub">No meals on these days.</p>'
+          : '<p class="sub">这些日期没有喂食计划。</p>'
       }
-      <button class="link"${dat} data-path="${esc(gi)}" data-action="sched-add-meal">+ Add meal</button>
+      <button class="link"${dat} data-path="${esc(gi)}" data-action="sched-add-meal">+ 添加一餐</button>
     </div>`,
     )
     .join('')}
@@ -220,14 +220,14 @@ function renderFeedEditor(id, t, value) {
 // each section edits its own entries and the save merges the whole array back.
 // A section that rewrote only its own rows would delete the other job.
 const POINT_SECTIONS = [
-  { type: 0, name: 'Scheduled cleaning' },
-  { type: 1, name: 'Periodic deodorizing' },
+  { type: 0, name: '定时清理' },
+  { type: 1, name: '定时除臭' },
 ];
 
 function renderPointsEditor(id, t, value) {
   const known = new Set(POINT_SECTIONS.map(s => s.type));
   const sections = POINT_SECTIONS.concat(
-    value.some(e => !known.has(e.type)) ? [{ type: null, name: 'Other' }] : [],
+    value.some(e => !known.has(e.type)) ? [{ type: null, name: '其他' }] : [],
   );
   return sections
     .map(section => {
@@ -246,17 +246,17 @@ function renderPointsEditor(id, t, value) {
         <span class="sched-vals">
           <input type="time" value="${esc(minToClock(entry.time))}" data-change="sched-point-time"${dat} data-idx="${esc(i)}">
           ${weekdayBar(id, t.target, entry.repeats, i)}
-          ${section.type === null ? `<span class="mut sched-note">type ${esc(entry.type)}</span>` : ''}
+          ${section.type === null ? `<span class="mut sched-note">类型 ${esc(entry.type)}</span>` : ''}
         </span>
         <span class="sched-acts">
-          <button class="link danger" data-action="sched-drop-point"${dat} data-idx="${esc(i)}" title="Remove this time" aria-label="Remove this time">✕</button>
+          <button class="link danger" data-action="sched-drop-point"${dat} data-idx="${esc(i)}" title="移除此时间" aria-label="移除此时间">✕</button>
         </span>
       </div>`,
               )
               .join('')
-          : '<p class="sub">No times set.</p>'
+          : '<p class="sub">尚未设置时间。</p>'
       }
-      ${section.type === null ? '' : `<button class="link" data-action="sched-add-point"${dat} data-type="${esc(section.type)}">+ Add time</button>`}
+      ${section.type === null ? '' : `<button class="link" data-action="sched-add-point"${dat} data-type="${esc(section.type)}">+ 添加时间</button>`}
     </div>`;
     })
     .join('');
@@ -286,37 +286,37 @@ function renderSchedules(d, sectionEntities) {
       // that shows up when you have changed something reads as one.
       const dat = ` data-id="${esc(d.id)}" data-target="${esc(t.target)}"`;
       return `<div class="sched${dirty ? ' dirty' : ''}">
-      <div class="sched-head"><span class="sched-name">${esc(t.name)}</span>
+      <div class="sched-head"><span class="sched-name">${esc(scheduleName(t.name))}</span>
         ${
           dirty
-            ? `<span class="sched-actions"><button class="act"${dat} data-action="sched-save">Save</button>
-               <button class="link"${dat} data-action="sched-revert">Discard</button></span>`
+            ? `<span class="sched-actions"><button class="act"${dat} data-action="sched-save">保存</button>
+               <button class="link"${dat} data-action="sched-revert">放弃</button></span>`
             : ''
         }</div>
       ${body}</div>`;
     })
     .join('');
 
-  return `<div class="card sched-card"><h3>Schedules${help(
-    'The device runs these on its own clock — this app answers when it asks. Times are local, and nothing is set for you: a schedule you have not filled in is empty, and the device is simply not restricted. A period that ends before it starts runs through midnight, which is normal and is how PetKit’s own app writes quiet hours.',
+  return `<div class="card sched-card"><h3>计划${help(
+    '设备按自身时钟执行计划，服务在设备询问时提供设置。时间为本地时间；尚未填写的计划为空，不会限制设备。结束时间早于开始时间表示跨越午夜。',
   )}</h3>
     ${
       times.length
         ? `<div class="ctrls">${times.map(e => controlRow(d.id, e)).join('')}</div>
-    <p class="sub">Those two are a single time of day. The periods below are RANGES — a start and an end — which is why they look different.</p>`
+    <p class="sub">以上两项是单个时间点；下方时间段包含开始和结束时间，因此显示方式不同。</p>`
         : ''
     }
     <div class="sched-grid">${editors}</div>
     ${
       texts.length
-        ? `<details class="sched-raw"><summary>Raw JSON</summary>
+        ? `<details class="sched-raw"><summary>原始 JSON</summary>
       <p class="sub">What the device is actually served. Also the only way to edit a shape the
         editor above does not know — nothing here rewrites a field it does not understand.</p>
       ${texts
         .map(
-          e => `<div class="sched"><div class="sched-head"><span class="sched-name">${esc(e.name)}</span></div>
+          e => `<div class="sched"><div class="sched-head"><span class="sched-name">${esc(entityName(e.key, e.name))}</span></div>
         <textarea class="sched-json" rows="4" data-id="${esc(d.id)}" data-key="${esc(e.key)}">${esc(typeof e.value === 'string' ? e.value : JSON.stringify(e.value ?? '', null, 2))}</textarea>
-        <button class="ghost act" data-action="save-schedule" data-id="${esc(d.id)}" data-key="${esc(e.key)}">Save ${esc(e.name)}</button></div>`,
+        <button class="ghost act" data-action="save-schedule" data-id="${esc(d.id)}" data-key="${esc(e.key)}">保存 ${esc(entityName(e.key, e.name))}</button></div>`,
         )
         .join('')}</details>`
         : ''
@@ -497,6 +497,6 @@ onAction('sched-save', async el => {
     );
     scheduleDetail(id);
   } catch (e) {
-    toast('Save failed: ' + e.message);
+    toast('保存失败：' + e.message);
   }
 });

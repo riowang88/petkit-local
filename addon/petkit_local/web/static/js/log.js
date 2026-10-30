@@ -91,7 +91,7 @@ function makeLogNode(e) {
     // Inside the row, which also carries data-action="toggle-log". `delegate`
     // resolves the innermost [data-action], so this swallows the click instead
     // of expanding the row on the way past — no stopPropagation needed.
-    `${dt ? '<button class="mini logcopy" data-action="copy-log" title="Copy this entry">Copy</button>' : ''}` +
+    `${dt ? '<button class="mini logcopy" data-action="copy-log" title="复制此条记录">复制</button>' : ''}` +
     `${dt ? '<span class="mut chev">▸</span>' : ''}</div>` +
     `${dt ? `<pre class="ld">${esc(dt)}</pre>` : ''}</div>`
   );
@@ -156,7 +156,7 @@ onAction('clear-log', () => clearLog());
 function downloadLog() {
   const hideHb = document.getElementById('hideHb').checked;
   const rows = LOG.rows.filter(e => !(hideHb && isHeartbeat(e)));
-  if (!rows.length) return toast('Nothing to download yet');
+  if (!rows.length) return toast('暂无可下载的日志');
   const text = rows
     .map(e => {
       const head = `[${fmtTs(e.ts)}] ${e.kind}${e.device_id != null ? ' #' + e.device_id : ''} — ${e.summary || ''}`;
@@ -173,7 +173,7 @@ function downloadLog() {
   // Revoking immediately can cancel the download in some browsers; one tick is
   // enough for the navigation to have been started.
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  toast(`Saved ${rows.length} rows`);
+  toast(`已保存 ${rows.length} 条记录`);
 }
 onAction('download-log', () => downloadLog());
 document
@@ -189,10 +189,9 @@ const DEVLOG = { files: [], sel: '', q: '', reason: '' };
 let _devlogT = null;
 
 const DEVLOG_REASONS = {
-  no_log_root: 'no log directory is configured',
-  no_bucket_endpoint: 'this app has no bucket address, so there is nowhere to send the device',
-  authority_not_splittable:
-    'the bucket address cannot be split into a host the device can build — it needs a dotted name or IP',
+  no_log_root: '尚未配置日志目录',
+  no_bucket_endpoint: '本服务没有媒体存储地址，设备无法上传',
+  authority_not_splittable: '媒体存储地址无法拆分为设备可用的主机名；需要带点的名称或 IP 地址',
 };
 
 async function loadDeviceLogs() {
@@ -202,12 +201,12 @@ async function loadDeviceLogs() {
   const pick = document.getElementById('devLogPick');
   if (!pick) return;
   if (!DEVLOG.files.length) {
-    pick.innerHTML = '<option value="">no logs yet</option>';
+    pick.innerHTML = '<option value="">暂无日志</option>';
     const why = DEVLOG.reason
-      ? `Cannot collect: ${DEVLOG_REASONS[DEVLOG.reason] || esc(DEVLOG.reason)}.`
+      ? `无法收集：${DEVLOG_REASONS[DEVLOG.reason] || esc(DEVLOG.reason)}。`
       : (r.enabled_devices || []).length
-        ? 'Collection is on. The device uploads on its own schedule — a reboot is the usual trigger.'
-        : 'No device has debug log collection turned on.';
+        ? '日志收集已启用。设备会按自己的计划上传，通常在重启时触发。'
+        : '没有设备启用调试日志收集。';
     document.getElementById('devLogView').innerHTML =
       `<p class="mut" style="padding:14px">${esc(why)}</p>`;
     document.getElementById('devLogDl').style.display = 'none';
@@ -238,10 +237,10 @@ async function readDeviceLog() {
   dl.style.display = '';
   dl.href = BASE + 'api/' + devlogUrl(DEVLOG.sel, '?download=1');
   document.getElementById('devLogCount').textContent = q
-    ? `${r.matched} of ${r.total} lines`
-    : `${r.total} lines`;
+    ? `${r.matched} / ${r.total} 行`
+    : `${r.total} 行`;
   if (!r.lines.length) {
-    view.innerHTML = `<p class="mut" style="padding:14px">No line matches.</p>`;
+    view.innerHTML = `<p class="mut" style="padding:14px">没有匹配的内容。</p>`;
     return;
   }
   view.innerHTML = r.lines

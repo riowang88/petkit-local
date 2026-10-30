@@ -15,7 +15,7 @@ let _wsRetry = WS_RETRY_MIN;
 function connectWS() {
   const st = document.getElementById('wsState');
   const down = () => {
-    st.textContent = 'reconnecting';
+    st.textContent = '重新连接中';
     st.className = 'pill bad';
     setTimeout(connectWS, _wsRetry);
     _wsRetry = Math.min(_wsRetry * 2, WS_RETRY_MAX);
@@ -34,7 +34,7 @@ function connectWS() {
   }
   ws.onopen = () => {
     _wsRetry = WS_RETRY_MIN;
-    st.textContent = 'live';
+    st.textContent = '实时连接';
     st.className = 'pill ok';
   };
   ws.onclose = down;

@@ -1,9 +1,10 @@
 import { esc } from './core.js';
+import { optionLabel } from './zh.js';
 
 function fmtVal(v) {
   if (v === null || v === undefined) return '<span class="mut">—</span>';
-  if (v === true) return 'on';
-  if (v === false) return 'off';
+  if (v === true) return '开启';
+  if (v === false) return '关闭';
   if (typeof v === 'object') return '<code>' + esc(JSON.stringify(v)) + '</code>';
   return esc(v);
 }
@@ -37,9 +38,9 @@ function fmtEntityValue(e) {
     const i = vals.findIndex(x => String(x) === String(v));
     // An unmapped value stays visible as its raw self, matching
     // `_enum_sensor_value_template`: blanking it would hide a real state.
-    if (i >= 0) return esc(e.options[i]);
+    if (i >= 0) return esc(optionLabel(e.key, e.options[i]));
   }
-  if (e.component === 'binary_sensor') return v === 0 || v === '0' || v === false ? 'off' : 'on';
+  if (e.component === 'binary_sensor') return v === 0 || v === '0' || v === false ? '否' : '是';
   // These two carry their own units ("1d 15h", a formatted date), so the raw
   // unit must NOT be appended or they read "1d 15h s".
   if (e.device_class === 'duration' && e.unit === 's') {

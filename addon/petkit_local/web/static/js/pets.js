@@ -11,7 +11,7 @@ async function setAiEnabled(id, on) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ai_enabled: on }),
   });
-  toast(r.ok ? 'Saved' : 'Error: ' + (r.error || 'failed'));
+  toast(r.ok ? '已保存' : '错误：' + (r.error || '失败'));
   // This toggle decides whether the pets section exists at all, so the view has
   // to be rebuilt — otherwise it saves and nothing visibly happens, which reads
   // as the switch not working.
@@ -72,16 +72,16 @@ async function loadPets() {
 // photographs, which is not something a page load gets to do.
 function importPetsCard(aiDevices) {
   return `<div class="card">
-    <h3>Import from PetKit${help(
-      'Asks PetKit which pets this device recognises and downloads their reference photos. Each pet arrives under a new local id with PetKit’s own id bound to it, so events the box already recorded under that id get named too. Nothing is sent until you press the button.',
+    <h3>从 PETKIT 导入${help(
+      '向 PETKIT 请求此设备识别的宠物及参考照片。导入时为每只宠物创建本地 ID，并关联 PETKIT ID，以便识别已有事件。只有点击按钮后才会发送请求。',
     )}</h3>
-    <p class="sub">Brings the mugshots across and names the history already recorded under PetKit's pet ids. Imported pets are called <code>PetKit pet &lt;id&gt;</code> — the name is not in the data a device receives, so rename them afterwards.</p>
+    <p class="sub">导入宠物头像并关联原 PETKIT 宠物 ID 的历史记录。由于设备收到的数据不包含名称，导入后会显示为 <code>PetKit pet &lt;id&gt;</code>，可自行重命名。</p>
     ${aiDevices
       .map(
         d => `<div class="unbound">
       <b>${esc(d.name || '#' + d.id)}</b>
       <span class="grow"></span>
-      <button class="mini" data-action="pets-cloud-import" data-id="${esc(d.id)}">Import from PetKit</button>
+      <button class="mini" data-action="pets-cloud-import" data-id="${esc(d.id)}">从 PETKIT 导入</button>
     </div>`,
       )
       .join('')}
@@ -92,19 +92,18 @@ function petsSection(pets, ds, aiDevices, recognisingIds) {
   return `
     <div class="card">
       <div class="row" style="align-items:baseline">
-        <h3 style="flex:1;margin:0">Pets</h3>
-        <span class="mut">${pets.length} pet${pets.length === 1 ? '' : 's'}</span>
+        <h3 style="flex:1;margin:0">宠物</h3>
+        <span class="mut">${pets.length} 只宠物</span>
       </div>
       <p class="sub" style="margin-top:8px">
-        Give each cat up to ${MAX_FACES} mugshots. The device downloads them and matches
-        against them itself — more angles, better recognition.
+        每只猫最多添加 ${MAX_FACES} 张头像，由设备下载并进行识别；多角度照片有助于识别。
       </p>
       <div class="newpet">
-        <input id="newPetName" placeholder="Name" aria-label="Pet name">
-        <select id="newPetDevice" aria-label="Assign to device">${aiDevices
+        <input id="newPetName" placeholder="名称" aria-label="宠物名称">
+        <select id="newPetDevice" aria-label="分配给设备">${aiDevices
           .map(d => `<option value="${esc(d.id)}">${esc(d.name)}</option>`)
           .join('')}</select>
-        <button class="act" data-action="add-pet">Add pet</button>
+        <button class="act" data-action="add-pet">添加宠物</button>
       </div>
     </div>
     ${pets.length ? pets.map(p => petCard(p, ds, recognisingIds)).join('') : emptyPets()}`;
@@ -117,20 +116,17 @@ function petsSection(pets, ds, aiDevices, recognisingIds) {
 // configure. The product list comes from the server rather than being spelled
 // out here, which is what let the old copy go stale when a fountain joined it.
 function noAiDeviceCard(names) {
-  return `<div class="card"><h3>No AI-capable device</h3>
-    <p class="sub" style="margin:0">None of your devices does on-device recognition${
-      names.length ? ` — that is ${names.map(esc).join(', ')}` : ''
-    }. A device not on that list earns it by asking: the first time one requests face
-    data we remember it, which is how the newer YumShare models are recognised despite
-    sharing a codename with older ones that have no camera AI.</p></div>`;
+  return `<div class="card"><h3>没有支持 AI 的设备</h3>
+    <p class="sub" style="margin:0">当前没有设备启用设备端识别${
+      names.length ? `。已知支持的型号：${names.map(esc).join('、')}` : ''
+    }。首次请求人脸数据的设备也会被记为支持识别。</p></div>`;
 }
 
 function recognitionOffCard() {
   return `<div class="card empty">
     <div class="big">\u{1F634}</div>
-    <b>Pet recognition is off</b>
-    <p class="sub" style="margin:6px 0 0">Your mugshots are kept, but nothing is matching
-      against them. Turn <b>Recognise pets</b> back on above to manage them.</p>
+    <b>宠物识别已关闭</b>
+    <p class="sub" style="margin:6px 0 0">头像仍然保留，但设备不会进行匹配。请在上方重新开启<b>识别宠物</b>后管理。</p>
   </div>`;
 }
 
@@ -142,12 +138,12 @@ function deviceAiCard(d, ourFaceIds) {
   const enabled = d.aiInfo ? d.aiInfo.ai_enabled : true;
   return `<div class="card">
     <div class="row" style="align-items:baseline">
-      <h3 style="flex:1;margin:0">On-device AI</h3>
+      <h3 style="flex:1;margin:0">设备端 AI</h3>
       <span class="mut">${esc(d.name)}</span>
     </div>
-    <p class="sub" style="margin-top:8px">What this device's camera watches and listens for.</p>
+    <p class="sub" style="margin-top:8px">此设备的摄像头监测和聆听的内容。</p>
     <div class="ctrls">
-      <label class="ctrl"><span>Recognise pets</span><span class="sw"><input type="checkbox" ${
+      <label class="ctrl"><span>识别宠物</span><span class="sw"><input type="checkbox" ${
         enabled ? 'checked' : ''
       } data-change="set-ai" data-id="${esc(d.id)}"><span class="sl"></span></span></label>
       ${ents.map(e => controlRow(d.id, e)).join('')}
@@ -159,9 +155,8 @@ function deviceAiCard(d, ourFaceIds) {
 function emptyPets() {
   return `<div class="card empty">
     <div class="big">🐈</div>
-    <b>No pets yet</b>
-    <p class="sub" style="margin:6px 0 0">Add one above, then give it a few mugshots.
-      Until then the box records visits without saying who made them.</p>
+    <b>暂无宠物</b>
+    <p class="sub" style="margin:6px 0 0">请先在上方添加宠物和头像；此前设备只会记录使用事件，不会标明是哪只宠物。</p>
   </div>`;
 }
 
@@ -182,7 +177,7 @@ function petCard(p, ds, recognisingIds) {
       const d = ds.find(x => x.id === id);
       const name = esc(d ? d.name : '#' + id);
       return off(id)
-        ? `<span class="badge off" title="Recognition is off on this device">${name} · off</span>`
+        ? `<span class="badge off" title="此设备上的识别已关闭">${name} · 已关闭</span>`
         : `<span class="badge">${name}</span>`;
     })
     .join(' ');
@@ -192,16 +187,16 @@ function petCard(p, ds, recognisingIds) {
   return `<div class="card petcard">
     <div class="pet-head">
       <b class="pet-name" data-action="rename-pet" data-id="${esc(p.id)}"
-         title="Click to rename">${esc(p.name)}</b>
-      <span class="pet-devs">${chips || '<span class="mut">no devices assigned</span>'}</span>
-      <button class="ghost act" data-action="delete-pet" data-id="${esc(p.id)}">Delete</button>
+         title="点击重命名">${esc(p.name)}</b>
+      <span class="pet-devs">${chips || '<span class="mut">未分配设备</span>'}</span>
+      <button class="ghost act" data-action="delete-pet" data-id="${esc(p.id)}">删除</button>
     </div>
     <div class="tiles">
       ${faces
         .map(
           f => `<div class="tile">
-        <img src="${BASE}${esc(f.url)}" alt="Mugshot ${esc(f.id)}">
-        <button class="tile-x" title="Remove this photo"
+        <img src="${BASE}${esc(f.url)}" alt="头像 ${esc(f.id)}">
+        <button class="tile-x" title="移除这张照片"
                 data-action="delete-face" data-id="${esc(p.id)}" data-face="${esc(f.id)}">✕</button>
       </div>`,
         )
@@ -211,12 +206,12 @@ function petCard(p, ds, recognisingIds) {
           ? ''
           : `<button class="tile tile-add" data-action="crop-open"
                      data-id="${esc(p.id)}" data-name="${esc(p.name)}">
-               <span class="plus">+</span><span>Add mugshot</span>
+               <span class="plus">+</span><span>添加头像</span>
              </button>`
       }
     </div>
     <div class="pet-foot mut">
-      ${faces.length} of ${MAX_FACES} mugshots${full ? ' · full' : ''}
+      ${faces.length} / ${MAX_FACES} 张头像${full ? ' · 已满' : ''}
     </div>
   </div>`;
 }
@@ -228,10 +223,8 @@ function petCard(p, ds, recognisingIds) {
 function unboundCard(unbound, pets) {
   if (!pets.length) return '';
   return `<div class="card">
-    <h3>Unrecognized identities</h3>
-    <p class="sub">Your box reported these pet ids, but they are not ours — it is still matching
-      against mugshots cached from PetKit's cloud. Bind one to name its past events. Once the
-      device picks up your own photos it reports our ids instead and this list empties by itself.</p>
+    <h3>未识别的身份</h3>
+    <p class="sub">设备上报的这些宠物 ID 不属于本地记录，可能仍在使用 PETKIT 云端缓存的头像。绑定后可为已有事件关联宠物；设备使用本地照片后会改为上报本地 ID。</p>
     ${unbound
       .map(
         u => `<div class="unbound">
@@ -243,7 +236,7 @@ function unboundCard(unbound, pets) {
       <select data-role="bind-pet">${pets
         .map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`)
         .join('')}</select>
-      <button class="mini" data-action="bind-pet-ref" data-ref="${esc(u.pet_ref)}">Bind</button>
+      <button class="mini" data-action="bind-pet-ref" data-ref="${esc(u.pet_ref)}">绑定</button>
     </div>`,
       )
       .join('')}
@@ -276,8 +269,8 @@ onAction('rename-pet', el => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
-    if (r.error) return toast('Error: ' + r.error);
-    toast('Renamed');
+    if (r.error) return toast('错误：' + r.error);
+    toast('已重命名');
     loadPets();
   };
 
@@ -301,14 +294,14 @@ onAction('bind-pet-ref', el =>
 
 onAction('pets-cloud-import', async el => {
   el.disabled = true;
-  toast('Asking PetKit and fetching the photos…');
+  toast('正在向 PETKIT 请求并获取照片…');
   const r = await api('pets/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ device_id: Number(el.dataset.id) }),
   });
   el.disabled = false;
-  if (r.error) return toast('Error: ' + r.error);
+  if (r.error) return toast('错误：' + r.error);
   const imported = (r.results || []).filter(x => x.outcome === 'imported');
   // Both numbers matter and neither is obvious: a photo can be refused after
   // it downloads (it has to be a real JPEG), and the bound count is history
@@ -328,7 +321,7 @@ onAction('pets-cloud-import', async el => {
 
 async function addPet() {
   const name = document.getElementById('newPetName').value.trim();
-  if (!name) return toast('Name required');
+  if (!name) return toast('请填写名称');
   const devSel = document.getElementById('newPetDevice');
   const device_ids = devSel.value ? [Number(devSel.value)] : [];
   const r = await api('pets', {
@@ -336,12 +329,12 @@ async function addPet() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: name, device_ids: device_ids }),
   });
-  toast(r.pet ? 'Pet added' : 'Error: ' + (r.error || 'failed'));
+  toast(r.pet ? '已添加宠物' : '错误：' + (r.error || '失败'));
   loadPets();
 }
 
 async function deletePet(id) {
-  if (!confirm('Delete this pet, and every mugshot it has?')) return;
+  if (!confirm('确定删除这只宠物及其所有头像吗？')) return;
   await api('pets/' + encodeURIComponent(id), { method: 'DELETE' });
   loadPets();
 }
@@ -375,7 +368,7 @@ async function bindPetRef(ref, petId) {
   toast(
     r.pet
       ? `Bound — ${r.bound_events} past event${r.bound_events === 1 ? '' : 's'} attributed`
-      : 'Error: ' + (r.error || 'failed'),
+      : '错误：' + (r.error || '失败'),
   );
   loadPets();
 }

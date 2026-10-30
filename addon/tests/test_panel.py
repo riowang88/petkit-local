@@ -79,7 +79,7 @@ async def test_index_renders_template_and_links_assets():
     try:
         html = await (await c.get("/")).text()
         # Markup survived the extraction...
-        assert '<section id="tab-timeline"' in html and "Provision via Bluetooth" in html
+        assert '<section id="tab-timeline"' in html and "通过蓝牙配网" in html
         # ...and the CSS/JS are now external, not inline.
         assert "<style>" not in html and "<script>\n" not in html
         # RELATIVE, so they resolve under whatever opaque prefix Ingress uses;
@@ -639,7 +639,7 @@ async def test_provision_ui_has_ble_protocol():
     c = await _mk_client(app)
     try:
         html = await (await c.get("/")).text()
-        assert "Provision via Bluetooth" in html
+        assert "通过蓝牙配网" in html
         js = _panel_js()
         # PetKit Ingenic framed JSON.
         assert "0000aaa0-0000-1000-8000-00805f9b34fb" in js  # service
@@ -726,8 +726,8 @@ async def test_the_capture_tab_warns_what_is_in_a_capture():
     c = await _mk_client(app)
     try:
         js = _panel_js()
-        assert "Every capture is sensitive" in js
-        assert "SSID" in js and "credential" in js.lower()
+        assert "所有流量记录都包含敏感信息" in js
+        assert "Wi-Fi 名称" in js and "账号凭据" in js
         # No per-file "sensitive" badge: singling some out implies the rest are
         # safe to post, and none of them are.
         assert "SENSITIVE_CAPTURES" not in js
@@ -1368,7 +1368,7 @@ def test_proxy_dependent_controls_are_gated_on_proxy_mode():
     assert re.search(r"ctrl\$\{\s*on\s*\?[^}]*disabled", js)
     assert re.search(r"\.ctrl\.disabled\s*\{", css)
     # The upstream picker and the blocked table are hidden outright.
-    assert re.search(r"\$\{\s*on\s*\?(?:.|\n){0,400}?Upstream server", js)
+    assert re.search(r"\$\{\s*on\s*\?(?:.|\n){0,400}?上游服务器", js)
     assert re.search(r"\$\{\s*on\s*\?(?:.|\n){0,200}?blockedView", js)
 
 
@@ -1450,7 +1450,7 @@ async def test_provision_refuses_a_bluetooth_only_accessory():
         js = _panel_js()
         for prefix in ("Petkit_W5", "Petkit_CTW3", "Petkit_K3"):
             assert prefix in js, prefix
-        assert "BLE accessories" in js
+        assert "仅支持蓝牙的配件" in js
     finally:
         await c.close()
 

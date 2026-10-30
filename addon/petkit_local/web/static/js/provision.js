@@ -77,7 +77,7 @@ function tzOptions(selected) {
       (isSel ? ' selected' : '') +
       '>' +
       esc(label) +
-      (isSel ? ' — detected' : '') +
+      (isSel ? ' — 已检测' : '') +
       '</option>';
   }
   return html;
@@ -139,22 +139,22 @@ async function loadProvision() {
 function provisionWarning(hasBt, secure) {
   const HOSTED = 'https://petkit.2442.pl';
   const hosted =
-    ' Or use the hosted provisioning page at <a href="' +
+    ' 也可以使用托管配网页面 <a href="' +
     HOSTED +
     '" target="_blank"><code>' +
     HOSTED +
-    '</code></a>, which runs entirely in your browser and talks to the device over Bluetooth — it never sees your Wi-Fi password.';
+    '</code></a>。项目称该页面在浏览器内运行并通过蓝牙与设备通信。';
   if (!secure)
     return {
       card:
-        '⚠ Web Bluetooth only works on a <b>secure page</b>, and this one is plain HTTP. Serve Home Assistant over HTTPS with your own certificate — provisioning then works from this tab, Ingress included. You will need <b>Chrome or Edge</b> as well; a plain-HTTP page cannot tell whether you have one, because the browser hides Web Bluetooth entirely until the page is secure.' +
+        '⚠ Web Bluetooth 需要<b>安全页面</b>，当前页面使用普通 HTTP。可使用受信任的 HTTPS 访问 Home Assistant，并使用 <b>Chrome 或 Edge</b> 配网。普通 HTTP 页面无法判断浏览器是否支持蓝牙。' +
         hosted,
-      tooltip: 'Web Bluetooth needs a secure page, and this one is plain HTTP. See the note above.',
+      tooltip: 'Web Bluetooth 需要安全页面；当前页面使用普通 HTTP。请查看上方提示。',
     };
   if (!hasBt)
     return {
-      card: "⚠ Web Bluetooth is only in <b>Chrome/Edge</b> (desktop or Android). Firefox, Safari and iOS can't provision.",
-      tooltip: 'This browser has no Web Bluetooth. Use Chrome or Edge, on desktop or Android.',
+      card: '⚠ Web Bluetooth 需要桌面或 Android 上的 <b>Chrome/Edge</b>；Firefox、Safari 和 iOS 不支持此配网方式。',
+      tooltip: '当前浏览器没有 Web Bluetooth，请在桌面或 Android 上使用 Chrome 或 Edge。',
     };
   return { card: '', tooltip: '' };
 }
@@ -211,16 +211,14 @@ function provisionUrlWarning(value) {
   // not be shown a stopped form.
   if (/\.local(?=[:/]|$)/i.test(value || '')) {
     out.push(
-      "⚠ The apiServers URL uses a <code>.local</code> mDNS host — most embedded PetKit devices can't resolve mDNS. Use your HA host's <b>IP</b> instead (e.g. <code>http://&lt;ha-host-ip&gt;/6/</code>).",
+      '⚠ apiServers 使用 <code>.local</code> mDNS 主机名，多数 PetKit 设备无法解析。请改用服务器的 <b>IP 地址</b>（例如 <code>http://&lt;ha-host-ip&gt;/6/</code>）。',
     );
   }
   try {
     const u = new URL(value);
     const port = u.port || (u.protocol === 'http:' ? '80' : u.protocol === 'https:' ? '443' : '');
     if (port && port !== '80') {
-      out.push(
-        '⚠ ESP32 devices such as T4 and D4 require the API server on port <b>80</b>. Provisioning them will fail with this URL.',
-      );
+      out.push('⚠ T4、D4 等 ESP32 设备要求 API 使用 <b>80</b> 端口，使用此地址配网会失败。');
     }
   } catch (e) {
     /* the field may still be half-typed */
@@ -635,13 +633,13 @@ async function doProvision() {
   const server = document.getElementById('p-server').value.trim();
   const st = document.getElementById('p-status');
   if (!ssid || !pwd) {
-    toast('WiFi SSID and password are required.');
+    toast('请填写 Wi-Fi 名称和密码。');
     return;
   }
   document.getElementById('p-log').textContent = '';
   let gatt = null;
   try {
-    st.textContent = ' requesting device…';
+    st.textContent = ' 正在请求设备…';
     const device = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: 'Petkit' }],
       optionalServices: [BLE_SERVICE, BLUFI_SERVICE],
@@ -649,16 +647,14 @@ async function doProvision() {
     const name = device.name || device.id || '';
     plog('selected: ' + name);
     if (BLE_ACCESSORY_PREFIXES.some(p => name.startsWith(p))) {
-      st.textContent = ' this model has no WiFi.';
+      st.textContent = ' 此型号没有 Wi-Fi。';
       plog(
         name +
-          ' is a Bluetooth-only accessory — there is no WiFi on it to configure. ' +
-          'Pair it instead from the Devices tab, on the panel of the litter box ' +
-          'or feeder that will relay for it.',
+          ' 是仅支持蓝牙的配件，没有 Wi-Fi 可供配置。请在“设备”页面中，从负责中继的猫砂盆或喂食器面板配对。',
       );
       return;
     }
-    st.textContent = ' connecting…';
+    st.textContent = ' 正在连接…';
     gatt = await device.gatt.connect();
     // The device has no timezone of its own: `TZ` is unset and `date` reports
     // UTC, so it burns UTC into video watermarks. Its `ctrl` binary parses
@@ -730,7 +726,7 @@ async function doProvision() {
         return null;
       }
     };
-    st.textContent = ' sending…';
+    st.textContent = ' 正在发送…';
     let heard;
     const petkit = await open(BLE_SERVICE);
     const blufi = petkit ? null : await open(BLUFI_SERVICE);
@@ -747,7 +743,7 @@ async function doProvision() {
       } catch (e) {
         seen = ['(could not be listed: ' + e.name + ')'];
       }
-      st.textContent = ' unknown device.';
+      st.textContent = ' 未识别的设备。';
       plog(
         "This device answered to neither PetKit's provisioning service (0xAAA0) " +
           'nor PetKit ESP32 provisioning (0xFFFF), so there is nothing here that can configure it. ' +
@@ -762,10 +758,10 @@ async function doProvision() {
     // The old wording was printed either way, so a payload the firmware never
     // understood read exactly like a success.
     if (heard) {
-      st.textContent = ' provisioned — device will restart and join WiFi.';
+      st.textContent = ' 配置已发送，设备将重启并连接 Wi-Fi。';
       plog('done. watching for the device to connect…');
     } else {
-      st.textContent = ' sent, but the device never answered.';
+      st.textContent = ' 已发送，但设备未响应。';
       plog(
         'The payload was written and acknowledged at the Bluetooth level, but the ' +
           'device said nothing back. It may still join — watching — but if it does ' +
@@ -779,7 +775,7 @@ async function doProvision() {
       SecurityError: 'Bluetooth blocked — the page must be HTTPS.',
       NotAllowedError: 'Permission denied — allow Bluetooth for the browser in your OS settings.',
     };
-    st.textContent = ' error: ' + (map[err.name] || err.name + ': ' + err.message);
+    st.textContent = ' 错误：' + (map[err.name] || err.name + ': ' + err.message);
     plog('ERROR ' + err.name + ': ' + err.message);
   } finally {
     try {
@@ -795,7 +791,7 @@ async function watchForDevice() {
     const ds = await api('devices');
     if (ds.length > before) {
       clearInterval(iv);
-      document.getElementById('p-status').textContent = ' ✓ device connected! see the Devices tab.';
+      document.getElementById('p-status').textContent = ' ✓ 设备已连接！请查看设备栏目。';
       plog('device connected: ' + ds[ds.length - 1].name + ' #' + ds[ds.length - 1].id);
     } else if (tries > 60) {
       clearInterval(iv);

@@ -17,7 +17,7 @@ onChange('set-entity-select', el =>
 );
 onAction('set-entity-time', el => {
   const input = el.closest('.cn').querySelector('input');
-  if (!input.value) return toast('Pick a time first');
+  if (!input.value) return toast('请先选择时间');
   // Sent verbatim. The server parses it, and it is the only place that decides
   // what a valid time is — the browser's own picker is not the authority.
   setEntity(Number(el.dataset.id), el.dataset.key, input.value, null, el.dataset.kind);
@@ -32,8 +32,8 @@ onAction('set-entity-number', el => {
   // range is refused here rather than clamped, because a silently different
   // number is worse than being told no -- and the server refuses it too, since
   // the panel is not the only way in.
-  if (input.value === '' || Number.isNaN(v)) return toast('Enter a number');
-  if (v < min || v > max) return toast(`Must be between ${min} and ${max}`);
+  if (input.value === '' || Number.isNaN(v)) return toast('请输入数字');
+  if (v < min || v > max) return toast(`数值必须在 ${min} 和 ${max} 之间`);
   setEntity(
     Number(el.dataset.id),
     el.dataset.key,
@@ -56,13 +56,13 @@ onAction('send-action', el =>
   ),
 );
 async function sendAction(el, id, action, destructive, name) {
-  if (destructive && !confirm('Send "' + name + '" to the device?')) return;
+  if (destructive && !confirm('确定向设备发送“' + name + '”吗？')) return;
   post(id, { action }, r => {
     const msg = r.ok
       ? r.delivered === 'mqtt'
-        ? 'Sent over MQTT'
-        : 'Queued — delivers on next heartbeat (~10s)'
-      : 'Error: ' + r.error;
+        ? '已通过 MQTT 发送'
+        : '已排队，等待下次心跳发送（约 10 秒）'
+      : '错误：' + r.error;
     // Found by walking up from the button that was pressed, not by a global id:
     // with a panel per device those ids would collide, and every device's
     // result would land in the first panel's slot.
@@ -81,13 +81,13 @@ async function setEntity(id, key, value, onAccepted, kind) {
       toast(
         r.ok
           ? r.delivered === 'mqtt'
-            ? 'Updated (MQTT)'
+            ? '已通过 MQTT 更新'
             : r.delivered === 'local'
-              ? 'Saved'
+              ? '已保存'
               : r.delivered === 'ble'
-                ? 'Sent over Bluetooth'
-                : 'Queued for heartbeat'
-          : 'Error: ' + r.error,
+                ? '已通过蓝牙发送'
+                : '已排队，等待心跳发送'
+          : '错误：' + r.error,
       );
     },
     kind,
@@ -109,9 +109,9 @@ async function sendRaw(el, id) {
   try {
     b = JSON.parse(ta.value);
   } catch (e) {
-    return toast('Invalid JSON');
+    return toast('JSON 格式无效');
   }
-  post(id, b, r => toast(r.ok ? 'Sent via ' + r.delivered : 'Error: ' + r.error));
+  post(id, b, r => toast(r.ok ? '发送方式：' + r.delivered : '错误：' + r.error));
 }
 async function post(id, body, cb, kind) {
   // A BLE accessory has its own route: it is reachable only while its parent
@@ -125,7 +125,7 @@ async function post(id, body, cb, kind) {
   });
   if (cb) cb(r);
   if (kind === 'ble') {
-    if (r && r.error) toast('Error: ' + r.error);
+    if (r && r.error) toast('错误：' + r.error);
     loadDevices();
     return;
   }

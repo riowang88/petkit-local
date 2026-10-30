@@ -5,16 +5,16 @@
 <div id="cropModal" class="modal hidden" data-action="crop-backdrop">
   <div class="modal-box crop-box">
     <div class="crop-head">
-      <h3 id="cropTitle">Add a mugshot</h3>
+      <h3 id="cropTitle">添加头像</h3>
       <button class="ghost act" data-action="crop-close">✕</button>
     </div>
 
     <div id="cropPick" class="dropzone" data-action="crop-browse">
       <input id="cropFile" type="file" accept="image/*" class="hidden"
-             aria-label="Choose a photo" data-change="crop-file">
+             aria-label="选择照片" data-change="crop-file">
       <div class="dz-big">🐈</div>
-      <b>Drop a photo here, or click to choose one</b>
-      <span class="mut">Any image format your browser can open</span>
+      <b>将照片拖到此处，或点击选择</b>
+      <span class="mut">支持浏览器可打开的图片格式</span>
     </div>
 
     <div id="cropStage" class="hidden">
@@ -65,23 +65,23 @@
         </div>
         <div class="crop-side">
           <div class="crop-preview-wrap">
-            <div class="crop-preview-label mut">What the device sees</div>
+            <div class="crop-preview-label mut">设备识别的画面</div>
             <canvas id="cropPreview" width="224" height="224"></canvas>
           </div>
           <ul id="cropRules" class="facerules"></ul>
         </div>
       </div>
       <div class="crop-zoom">
-        <span class="mut">Zoom</span>
+        <span class="mut">缩放</span>
         <input id="cropZoom" type="range" min="100" max="800" value="100"
-               aria-label="Zoom" data-input="crop-zoom">
-        <button class="ghost act" data-action="crop-reset">Reset</button>
+               aria-label="缩放" data-input="crop-zoom">
+        <button class="ghost act" data-action="crop-reset">重置</button>
       </div>
       <div class="crop-actions">
-        <span id="cropHint" class="mut">Zoom in until the head fills the outline — closer than feels right.</span>
+        <span id="cropHint" class="mut">放大照片，让猫的头部填满轮廓。</span>
         <span class="grow"></span>
-        <button class="ghost act" data-action="crop-back">Choose another</button>
-        <button class="act" data-action="crop-save">Use this photo</button>
+        <button class="ghost act" data-action="crop-back">选择其他照片</button>
+        <button class="act" data-action="crop-save">使用这张照片</button>
       </div>
     </div>
   </div>

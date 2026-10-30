@@ -67,9 +67,8 @@ async function checkPageIsCurrent() {
   const bar = document.createElement('div');
   bar.className = 'stale-banner';
   bar.innerHTML =
-    '<b>This page is out of date.</b> The app has been updated since it was ' +
-    'loaded, and your browser is still running the older panel. ' +
-    '<button class="mini" data-action="reload-panel">Reload</button>';
+    '<b>当前页面已过期。</b> 服务已更新，但浏览器仍在使用旧版面板。 ' +
+    '<button class="mini" data-action="reload-panel">重新加载</button>';
   document.body.prepend(bar);
 }
 onAction('reload-panel', () => location.reload());

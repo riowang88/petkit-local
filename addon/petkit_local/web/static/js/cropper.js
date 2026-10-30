@@ -60,7 +60,7 @@ function cropEls() {
 function openCropper(petId, petName) {
   const el = cropEls();
   _CROP = { petId: petId, bitmap: null, scale: 1, minScale: 1, x: 0, y: 0, dragging: false };
-  el.title.textContent = petName ? `Add a mugshot of ${petName}` : 'Add a mugshot';
+  el.title.textContent = petName ? `为 ${petName} 添加头像` : '添加头像';
   el.rules.innerHTML = FACE_RULES.map(r => `<li class="${r[0]}">${esc(r[1])}</li>`).join('');
   el.file.value = '';
   el.pick.classList.remove('hidden', 'dragover');

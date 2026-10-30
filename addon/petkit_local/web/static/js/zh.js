@@ -1,0 +1,250 @@
+// Display-only translations. Never translate keys, device values or payloads.
+const ENTITY_NAMES = {
+  device_status: '设备状态',
+  error: '故障',
+  litter_weight: '猫砂重量',
+  litter_percent: '猫砂容量',
+  used_times: '使用次数',
+  n50_durability: 'N50 剩余天数',
+  n60_spray_days: 'N60 剩余天数',
+  total_time: '运行时长',
+  rssi: 'Wi-Fi 信号',
+  pet_weight: '宠物体重',
+  last_clean: '最近清理',
+  last_visit: '最近使用',
+  waste_bin: '垃圾桶已满',
+  pet_occupied: '宠物在猫砂盆内',
+  waste_bin_present: '垃圾桶已安装',
+  deodorizer_present: 'N60 除臭器已安装',
+  deodorization_running: '正在除臭',
+  hall_standby: '霍尔传感器：待机',
+  hall_smooth: '霍尔传感器：平整',
+  hall_dump: '霍尔传感器：排空',
+  hall_open: '霍尔传感器：打开',
+  hall_close: '霍尔传感器：关闭',
+  hall_top: '霍尔传感器：顶部',
+  garbage_bag_state: '垃圾袋状态',
+  packing_state: '打包状态',
+  bagging_state: '装袋状态',
+  seal_door_state: '密封门状态',
+  box_store_state: '垃圾桶存储状态',
+  package_count: '剩余垃圾袋',
+  toilet_event: '如厕事件',
+  cleaning_event: '清理事件',
+  error_event: '故障事件',
+  auto_work: '自动清理',
+  child_lock: '童锁',
+  display: '显示屏',
+  avoid_repeat: '避免重复清理',
+  kitten: '幼猫模式',
+  disturb_mode: '免打扰',
+  deep_clean: '深度清理',
+  underweight: '低体重检测',
+  bury: '覆盖排泄物',
+  downpos: '持续旋转',
+  sand_saving: '节省猫砂',
+  fixed_time_clear: '定时清理',
+  click_ok: '童锁下允许确认按钮',
+  auto_spray: '自动除臭',
+  fixed_time_spray: '定时除臭',
+  deep_spray: '深度除臭',
+  camera: '摄像头',
+  microphone: '麦克风',
+  night_vision: '夜视',
+  light_assist: '清理辅助照明',
+  toilet_light: '如厕照明',
+  camera_light: '摄像头照明',
+  video_timestamp: '视频时间戳',
+  yowling_detection: '异常叫声检测',
+  ph_detection: '尿液酸碱度检测',
+  pet_detection: '宠物检测',
+  wander_detection: '徘徊检测',
+  toilet_detection: '如厕检测',
+  voice_prompt: '语音提示',
+  voice_disturb_mode: '语音免打扰',
+  capability_full_video: '录像',
+  capability_event_image: '照片',
+  capability_high_light: '精彩片段',
+  capability_dynamic_video: '动态片段',
+  cleaning_delay: '清理延迟',
+  volume: '音量',
+  last_snapshot: '最近照片',
+  last_clip: '最近片段',
+  stream_url: '摄像头视频地址',
+  sand_type: '猫砂类型',
+  cleaning_interval: '避免重复清理间隔',
+  cleaning_start: '开始清理',
+  maintenance_start: '进入维护模式',
+  maintenance_stop: '退出维护模式',
+  dump_litter: '排空猫砂',
+  deodorize: '除臭',
+  reset_n50: '重置 N50',
+  reset_n60: '重置 N60',
+  pause: '暂停',
+  resume: '继续',
+  reset: '停止 / 复位',
+  level_litter: '平整猫砂',
+  light: '照明',
+  power_off: '关闭电源',
+  power_on: '开启电源',
+  pack_waste: '打包垃圾',
+  open_sealed_door: '打开密封门',
+  reset_bagbox: '重置垃圾袋计数',
+  cleaning_schedule: '清理计划（JSON）',
+};
+
+const OPTION_LABELS = {
+  bentonite: '膨润土猫砂',
+  tofu: '豆腐猫砂',
+  mixed: '混合猫砂',
+  disabled: '关闭',
+  enabled: '开启',
+  on: '开启',
+  off: '关闭',
+  idle: '空闲',
+  cleaning: '清理中',
+  dumping: '排空中',
+  resetting: '复位中',
+  leveling: '平整中',
+  deodorizing: '除臭中',
+  'odor removal': '除臭中',
+  calibrating: '校准中',
+  'reset deodorant': '除臭器重置中',
+  'light cycle': '照明周期中',
+  'reset max deodorant': '除臭器最大值重置中',
+  maintenance: '维护中',
+  unknown: '未知',
+};
+
+const SCHEDULE_NAMES = {
+  'Screen Period': '显示屏时段',
+  'Indicator Light Period': '指示灯时段',
+  'Cleaning Do Not Disturb': '清理免打扰时段',
+  'Voice Undisturbed Period': '语音免打扰时段',
+  'Shooting Period': '摄像时段',
+  'Detection Period': '检测时段',
+  'Water Top-Up Undisturbed Period': '补水免打扰时段',
+  'wlDisturb Undisturbed Period': 'wlDisturb 免打扰时段',
+  'Scheduled Cleaning & Deodorizing': '定时清理与除臭',
+  'Feeding Schedule': '喂食计划',
+};
+
+const EVENT_LABELS = {
+  Error: '故障',
+  'Error cleared': '故障已解除',
+  'Mechanism started': '机构启动',
+  'Mechanism step': '机构步骤',
+  'Cleaning done': '清理完成',
+  'Litter emptied': '猫砂已排空',
+  'Reset done': '复位完成',
+  Deodorizing: '除臭',
+  'Weight check': '重量检测',
+  'Toilet visit': '如厕',
+  'Litter correction done': '猫砂校正完成',
+  'Motor stop requested': '已请求停止电机',
+  'Motor stop paused': '电机停止已暂停',
+  'Motor stop resumed': '电机停止已继续',
+  'Light cycle': '照明周期',
+  'Litter correction': '猫砂校正',
+  Appeared: '出现',
+  'Deodorant reset done': '除臭器复位完成',
+  'Detection result': '检测结果',
+  'BLE relay started': '蓝牙中继启动',
+  'BLE relay data': '蓝牙中继数据',
+  'Feeding done': '喂食完成',
+  'Feeding started': '喂食开始',
+  'Eating started': '进食开始',
+  'Motion detected': '检测到移动',
+  'Pet detected': '检测到宠物',
+  'Drinking started': '饮水开始',
+  'Drinking done': '饮水结束',
+  'Work started': '工作开始',
+  'Work paused': '工作暂停',
+  'Work resumed': '工作继续',
+  'Dumping done': '排空完成',
+  'Leveling done': '平整完成',
+  'Litter level corrected': '猫砂高度已校正',
+  'Light cycle done': '照明周期完成',
+  'Deodorizing done': '除臭完成',
+  'Melt cycle done': '融化周期完成',
+  'Bagging done': '装袋完成',
+  'Pet entered': '宠物进入',
+  'Pet left': '宠物离开',
+  'Pet nearby': '宠物在附近',
+  'Pet left the area': '宠物离开区域',
+  'Feeding cancelled': '喂食已取消',
+  'Eating done': '进食结束',
+  'Refill done': '补充完成',
+  'Flush done': '冲洗完成',
+  'Water change done': '换水完成',
+  'Recording event': '录像事件',
+  'State update': '状态更新',
+  'Config requested': '请求配置',
+  'BLE response': '蓝牙响应',
+  'BLE relay finished': '蓝牙中继结束',
+};
+
+// The original description is still shown below each translation for audit.
+const PATCHERS = {
+  mqtt: [
+    '跳过 MQTT TLS 证书验证',
+    '修改设备的 ctrl 程序，使其接受任意 MQTT 服务器证书，以便通过 TLS 接入本地 MQTT。此操作会削弱服务器身份验证。项目会将程序复制到可写存储、修改证书链验证函数并更新启动包装。可用架构及适配情况以设备实际检查为准。',
+  ],
+  cloud: [
+    '本地存储（媒体上传）',
+    '修改 cloud 程序，使照片和录像上传到本地存储。项目会允许局域网地址并改变上传连接目标；还需要 CA 证书补丁。项目会复制并修改程序，再更新启动包装。媒体目的地由 STS 响应决定。',
+  ],
+  camera: [
+    '本地摄像头视频',
+    '将设备自带的本地视频服务用于替代 Agora，并由 go2rtc 转发为 RTSP。不要把设备原始视频地址直接交给 Home Assistant：项目报告可能导致 HA 崩溃。设备视频 HTTP 服务没有身份认证，局域网内其他设备可能访问。此操作改变启动包装；原厂 App 的实时视频会停止。设备的看门狗可能反复记录 Agora 重启日志，连接间隔过短也可能失败。',
+  ],
+  cacert: [
+    'CA 证书（媒体上传 TLS）',
+    '将本地服务的自签证书加入设备 CA 证书包，以便媒体上传；需要与本地存储补丁配合。项目会复制证书包并更新设备启动包装。',
+  ],
+  ssh: [
+    '持久 SSH 访问',
+    '在设备安装带公钥认证的 Dropbear SSH，并修改启动包装使其在重启后启动。必须提供公钥；密码认证关闭。该访问可能在升级或恢复出厂设置后仍存在，除非可写存储被格式化。旧版相关启动脚本可能被重命名。',
+  ],
+  talk: [
+    '双向语音（对讲）',
+    '在设备安装音频接收脚本并修改启动包装，以便从面板向扬声器发送音频。需要带扬声器的摄像头设备。设备上的监听端口没有认证，局域网内其他人可能向扬声器发送声音；仅在可信网络使用。通话为半双工，讲话时应关闭收听以免回声。',
+  ],
+};
+
+function entityName(key, original) {
+  // Water fountains reuse this key for water-treatment work, not litter cleaning.
+  if (key === 'cleaning_event' && original === 'Work Event') return '工作事件';
+  return Object.hasOwn(ENTITY_NAMES, key) ? ENTITY_NAMES[key] : original;
+}
+
+function optionLabel(key, original) {
+  if (key === 'cleaning_interval' && typeof original === 'string') {
+    const minutes = original.match(/^(\d+)min$/);
+    const hours = original.match(/^(\d+)h(?:(\d+)min)?$/);
+    if (minutes) return `${minutes[1]} 分钟`;
+    if (hours) return `${hours[1]} 小时${hours[2] ? ` ${hours[2]} 分钟` : ''}`;
+  }
+  if (key === 'sand_type' || key === 'cleaning_interval' || key === 'device_status') {
+    return Object.hasOwn(OPTION_LABELS, original) ? OPTION_LABELS[original] : original;
+  }
+  return original;
+}
+
+function patcherName(key, original) {
+  return Object.hasOwn(PATCHERS, key) ? PATCHERS[key][0] : original;
+}
+
+function patcherDescription(key) {
+  return Object.hasOwn(PATCHERS, key) ? PATCHERS[key][1] : '';
+}
+
+function scheduleName(original) {
+  return Object.hasOwn(SCHEDULE_NAMES, original) ? SCHEDULE_NAMES[original] : original;
+}
+
+function eventLabel(original) {
+  return Object.hasOwn(EVENT_LABELS, original) ? EVENT_LABELS[original] : original;
+}
+
+export { entityName, optionLabel, patcherName, patcherDescription, scheduleName, eventLabel };
