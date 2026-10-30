@@ -192,6 +192,13 @@ def _log_settings_view(d: Device, request: web.Request) -> dict[str, Any]:
     }
 
 
+def _stream_probe_view(d: Device, supervisor: Any | None) -> dict[str, Any] | None:
+    """The camera sidecar's last probe of `d`, or None for anything else."""
+    if not d.is_camera or supervisor is None:
+        return None
+    return supervisor.probe_info(d)
+
+
 async def api_device_detail(request: web.Request) -> web.Response:
     """Everything the device detail view needs, in one object.
 
@@ -225,6 +232,10 @@ async def api_device_detail(request: web.Request) -> web.Response:
         # with everything else about the device. Empty until a probe has
         # confirmed the device is really serving (`media/go2rtc.py`).
         "streams": stream_urls_with_rtsp(d, request.app.get("go2rtc")),
+        # Why `streams` is empty, when it is: the last probe's verdict and
+        # reason (`Go2rtc.probe_info`). Null until the first probe, and when
+        # there is no sidecar. In-memory only — never part of `state`.
+        "streamProbe": _stream_probe_view(d, request.app.get("go2rtc")),
         # Every schedule this model has, with the value it is REALLY running:
         # `multi_config_ranges` resolves a stored one against the fallback the
         # device would otherwise be served, so the panel's editor and

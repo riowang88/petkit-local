@@ -74,6 +74,31 @@ const assert = require('node:assert/strict');
   assert.equal(escaped.images, 0);
   assert.equal(escaped.option, '<img src=x onerror=alert(1)>');
   assert.match(escaped.label, /<img src=x onerror=alert\(1\)>/);
+  const reasons = await page.evaluate(async () => {
+    const { streamProbeReason } = await import('/js/zh.js');
+    const { liveWaitReason } = await import('/js/devices.js');
+    return {
+      mapped: ['unreachable', 'timeout', 'http_404', 'bad_signature', 'busy', 'no_ip', 'odd'].map(
+        streamProbeReason,
+      ),
+      none: liveWaitReason(null),
+      busy: liveWaitReason({ ok: true, reason: 'ok', busy: true }),
+      unsafe: liveWaitReason({ ok: false, reason: '<img src=x onerror=alert(1)>', busy: false }),
+    };
+  });
+  assert.deepEqual(reasons.mapped, [
+    'Mac 无法连接设备（网络不可达）',
+    '连接设备超时',
+    '设备返回 HTTP 404',
+    '设备未输出视频流',
+    '正在观看中',
+    '设备尚未上报 IP',
+    'odd',
+  ]);
+  assert.equal(reasons.none, '');
+  assert.equal(reasons.busy, '（正在观看中）');
+  // An unknown reason is shown as-is, and so must be escaped like any other text.
+  assert.equal(reasons.unsafe, '（&lt;img src=x onerror=alert(1)&gt;）');
   await browser.close();
   console.log('PASS: translated display preserves original control values and action identities');
 })().catch(e => {

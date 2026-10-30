@@ -212,6 +212,16 @@ const PATCHERS = {
   ],
 };
 
+// Why the camera sidecar's last probe found no stream (`streamProbe.reason`).
+const STREAM_PROBE_REASONS = {
+  unreachable: 'Mac 无法连接设备（网络不可达）',
+  timeout: '连接设备超时',
+  bad_signature: '设备未输出视频流',
+  busy: '正在观看中',
+  no_ip: '设备尚未上报 IP',
+  error: '探测出错',
+};
+
 function entityName(key, original) {
   // Water fountains reuse this key for water-treatment work, not litter cleaning.
   if (key === 'cleaning_event' && original === 'Work Event') return '工作事件';
@@ -247,4 +257,18 @@ function eventLabel(original) {
   return Object.hasOwn(EVENT_LABELS, original) ? EVENT_LABELS[original] : original;
 }
 
-export { entityName, optionLabel, patcherName, patcherDescription, scheduleName, eventLabel };
+function streamProbeReason(reason) {
+  const http = typeof reason === 'string' && reason.match(/^http_(\d+)$/);
+  if (http) return `设备返回 HTTP ${http[1]}`;
+  return Object.hasOwn(STREAM_PROBE_REASONS, reason) ? STREAM_PROBE_REASONS[reason] : reason;
+}
+
+export {
+  entityName,
+  optionLabel,
+  patcherName,
+  patcherDescription,
+  scheduleName,
+  eventLabel,
+  streamProbeReason,
+};

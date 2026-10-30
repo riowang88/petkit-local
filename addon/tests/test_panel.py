@@ -1031,6 +1031,9 @@ async def test_the_stream_addresses_live_on_the_device_not_on_the_patcher():
         def stream_url_for(self, device):
             return "rtsp://addon-host:8554/1"
 
+        def probe_info(self, device):
+            return None
+
     app["go2rtc"] = _Sidecar()
     c = await _mk_client(app)
     try:
@@ -1043,6 +1046,49 @@ async def test_the_stream_addresses_live_on_the_device_not_on_the_patcher():
 
         patcher = await (await c.get("/api/devices/1/patcher")).json()
         assert "streams" not in patcher["patchers"]["camera"]
+    finally:
+        await c.close()
+
+
+async def test_the_detail_says_why_a_camera_has_no_stream():
+    """`streams` being empty said only "no"; `streamProbe` says why, from the
+    sidecar's memory and never from `state`, which is persisted."""
+    reg = DeviceRegistry()
+    reg.get_or_create(petkit_id=1, device_type="t5", serial_number="SN").state["ip"] = "192.0.2.10"
+    reg.get_or_create(petkit_id=2, device_type="t4", serial_number="SN2")
+    app, reg, hub = _panel(reg=reg)
+    probe = {"ok": False, "reason": "unreachable", "checked_at": 1.8e9,
+             "next_at": 1.8e9 + 60, "busy": False}
+    asked = []
+
+    class _Sidecar:
+        def stream_url_for(self, device):
+            return ""
+
+        def probe_info(self, device):
+            asked.append(device.petkit_id)
+            return dict(probe)
+
+    app["go2rtc"] = _Sidecar()
+    c = await _mk_client(app)
+    try:
+        detail = await (await c.get("/api/devices/1")).json()
+        assert detail["streamProbe"] == probe
+        assert "streamProbe" not in detail["state"]
+        # Not a camera: nothing to probe, and the sidecar is not asked.
+        assert (await (await c.get("/api/devices/2")).json())["streamProbe"] is None
+        assert asked == [1]
+    finally:
+        await c.close()
+
+
+async def test_no_sidecar_means_no_probe_to_report():
+    reg = DeviceRegistry()
+    reg.get_or_create(petkit_id=1, device_type="t5", serial_number="SN")
+    app, reg, hub = _panel(reg=reg)
+    c = await _mk_client(app)
+    try:
+        assert (await (await c.get("/api/devices/1")).json())["streamProbe"] is None
     finally:
         await c.close()
 

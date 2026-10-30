@@ -3,7 +3,7 @@ import { onAction, onChange, onToggle, renderSection } from './delegate.js';
 import { help } from './help.js';
 import { SHOW_ALL, entityTable, controlRow } from './entities.js';
 import { DEVLOG_REASONS } from './log.js';
-import { entityName } from './zh.js';
+import { entityName, streamProbeReason } from './zh.js';
 
 let DEVICES = [];
 let ACCESSORIES = [];
@@ -597,6 +597,14 @@ const ENTITY_SECTION = {
 //
 // Asked only when pressed. The add-on never polls PetKit on a schedule of its
 // own; see `http/cloud_fetch.py`.
+// Why the live view is still waiting, from the sidecar's last probe. Empty
+// until there has been one: "waiting" alone is the honest answer then.
+function liveWaitReason(probe) {
+  if (!probe) return '';
+  const reason = probe.busy ? 'busy' : probe.reason;
+  return reason ? `（${esc(streamProbeReason(reason))}）` : '';
+}
+
 function importFromCloudBlock(id) {
   // `.act`, not `.mini`: a device panel has no filled backgrounds anywhere
   // else (see styles.css), and this is a peer of the "Pair accessory" button
@@ -791,7 +799,7 @@ function renderPanelBody(d) {
           'Live view comes from this app’s own go2rtc, which reads the device and republishes it as RTSP. It only pulls from the device while somebody is watching. Recordings arrive whether or not any of this is set up.',
         )}</h3>
     <p class="sub">录像片段和照片可在<a data-action="goto-tab" data-tab="timeline">时间线</a>及 Home Assistant 媒体浏览器中查看。</p>
-    ${d.is_camera ? `<p><button class="act" data-action="open-live" data-id="${esc(d.id)}" data-name="${esc((d.type || '').toUpperCase() + ' · #' + d.id)}" ${d.state?.streamAvailable ? '' : 'disabled'}>查看实时画面</button>${d.state?.streamAvailable ? '' : ' <span class="mut">等待设备视频就绪</span>'}</p>` : ''}
+    ${d.is_camera ? `<p><button class="act" data-action="open-live" data-id="${esc(d.id)}" data-name="${esc((d.type || '').toUpperCase() + ' · #' + d.id)}" ${d.state?.streamAvailable ? '' : 'disabled'}>查看实时画面</button>${d.state?.streamAvailable ? '' : ` <span class="mut">等待设备视频就绪${liveWaitReason(d.streamProbe)}</span>`}</p>` : ''}
     ${
       // The stream addresses live HERE and not on the Patchers tab: that card is
       // about applying and undoing a change to the firmware, and once it is
@@ -1020,4 +1028,5 @@ export {
   facesOnDevice,
   scheduleRefresh,
   scheduleDetail,
+  liveWaitReason,
 };
