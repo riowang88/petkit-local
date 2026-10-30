@@ -538,6 +538,10 @@ def test_ptz_buttons_stage_the_matching_helper(key, kind, tmp_path, monkeypatch)
     assert f"/patcher/download/2/ptz_{kind}" in cmd
     assert "wget -q -O /tmp/ptz.bin" in cmd
     assert "/tmp/ptz.bin" in cmd
+    if kind == "flip":
+        assert "for i in" not in cmd, "a flip is one shot, not five flips"
+    else:
+        assert "for i in 1 2 3 4 5; do /tmp/ptz.bin; usleep 200000; done" in cmd
 
     staged = tmp_path / "2" / f"ptz_{kind}"
     assert staged.is_file()

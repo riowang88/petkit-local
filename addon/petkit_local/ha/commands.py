@@ -164,8 +164,14 @@ def _reset_bagbox(_device: Device) -> Command:
     )
 
 
+#: One button press is five internal steps. A single step (70 encoder counts)
+#: is nearly imperceptible at 480px, so the panel/HA press repeats the helper
+#: rather than exposing a second "big step" button. The flip is always one shot.
+CAMERA_STEPS_PER_PRESS = 5
+
+
 def _ptz(device: Device, kind: str) -> Command:
-    """Move the T6 camera one small step, or flip it 180 degrees.
+    """Move the T6 camera five small steps, or flip it 180 degrees.
 
     The device exposes no HTTP service for this: the only entry is internal
     message 4100 on ``/msg_dispatch_2``. A 464-byte MIPS helper is staged behind
@@ -194,9 +200,16 @@ def _ptz(device: Device, kind: str) -> Command:
         url = ptz.staged_url(filename, device.petkit_id)
     except Exception as exc:  # noqa: BLE001 - staging failure is a refusal, not a 500
         raise Refused(f"cannot stage the camera helper: {exc}") from exc
+    if kind == "flip":
+        move = "/tmp/ptz.bin"
+    else:
+        # One mqueue message per step; the short pause lets ctrl drain the
+        # queue (msgsize 544, msg_max 10) before the next send.
+        indices = " ".join(str(n) for n in range(1, CAMERA_STEPS_PER_PRESS + 1))
+        move = f"for i in {indices}; do /tmp/ptz.bin; usleep 200000; done"
     cmd = (
         f"wget -q -O /tmp/ptz.bin {url} && "
-        f"chmod +x /tmp/ptz.bin && /tmp/ptz.bin; "
+        f"chmod +x /tmp/ptz.bin && {move}; "
         f"rm -f /tmp/ptz.bin"
     )
     ptz.release_later(filename, device.petkit_id)
