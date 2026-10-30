@@ -1,5 +1,6 @@
 """The camera sidecar: config generation, the probe, and the child process."""
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from aiohttp import web
@@ -101,6 +102,36 @@ async def test_the_probe_accepts_an_flv_stream():
         assert await g.probe_stream(addr) is True
     finally:
         await client.close()
+
+
+async def test_temporarily_unavailable_camera_can_recover_within_a_minute(tmp_path, monkeypatch):
+    clock = [100.0]
+    ready = [False]
+    calls = []
+
+    async def media(request):
+        calls.append(request.path)
+        return web.Response(body=g.FLV_SIGNATURE if ready[0] else b"not ready", status=200)
+
+    app = web.Application()
+    app.router.add_get("/main.flv", media)
+    server = TestServer(app)
+    await server.start_server()
+    monkeypatch.setattr(g, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    camera = _cam(ip=f"127.0.0.1:{server.port}", available=False)
+    sidecar = _sidecar(_registry(camera), tmp_path)
+    try:
+        await sidecar.refresh_probes()
+        ready[0] = True
+        clock[0] = 159.9
+        await sidecar.refresh_probes()
+        assert len(calls) == 1
+        clock[0] = 160.1
+        await sidecar.refresh_probes()
+        assert len(calls) == 2
+        assert camera.state.get(g.STREAM_AVAILABLE) is True
+    finally:
+        await server.close()
 
 
 async def test_an_open_port_is_not_a_stream():

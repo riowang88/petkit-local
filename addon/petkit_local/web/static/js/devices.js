@@ -791,6 +791,7 @@ function renderPanelBody(d) {
           'Live view comes from this app’s own go2rtc, which reads the device and republishes it as RTSP. It only pulls from the device while somebody is watching. Recordings arrive whether or not any of this is set up.',
         )}</h3>
     <p class="sub">录像片段和照片可在<a data-action="goto-tab" data-tab="timeline">时间线</a>及 Home Assistant 媒体浏览器中查看。</p>
+    ${d.is_camera ? `<p><button class="act" data-action="open-live" data-id="${esc(d.id)}" data-name="${esc((d.type || '').toUpperCase() + ' · #' + d.id)}" ${d.state?.streamAvailable ? '' : 'disabled'}>查看实时画面</button>${d.state?.streamAvailable ? '' : ' <span class="mut">等待设备视频就绪</span>'}</p>` : ''}
     ${
       // The stream addresses live HERE and not on the Patchers tab: that card is
       // about applying and undoing a change to the firmware, and once it is

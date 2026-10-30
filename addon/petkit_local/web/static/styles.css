@@ -1855,3 +1855,42 @@ button.help[aria-expanded='true'] {
 .cn input.dirty {
   border-color: var(--warn);
 }
+:root .live-dialog {
+  width: min(94vw, 760px);
+  max-height: 95vh;
+  padding: 18px;
+  border: 1px solid #dce2e7;
+  border-radius: 16px;
+  background: #fff;
+  color: #1c2933;
+}
+.live-dialog::backdrop {
+  background: #0009;
+}
+.live-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.live-heading h3 {
+  margin: 0;
+}
+.live-screen {
+  width: 100%;
+  aspect-ratio: 1;
+  max-height: 72vh;
+  background: #101820;
+}
+.live-screen petkit-live-video,
+.live-screen video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.live-status,
+.live-note {
+  margin: 10px 0;
+  font-size: 13px;
+}

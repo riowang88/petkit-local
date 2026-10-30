@@ -44,6 +44,7 @@ import './patchers.js';
 import './provision.js';
 import './timeline.js';
 import './media.js';
+import './live.js';
 import './pets.js';
 import './cropper.js';
 

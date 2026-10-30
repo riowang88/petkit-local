@@ -72,6 +72,9 @@ try {
 }
 globalThis.EventSource = class { constructor() {} addEventListener() {} close() {} };
 globalThis.WebSocket = class { constructor() {} addEventListener() {} send() {} close() {} };
+globalThis.HTMLElement = class extends EventTarget {};
+globalThis.customElements = {define: noop, get: () => undefined};
+globalThis.addEventListener = noop;
 globalThis.requestAnimationFrame = noop;
 globalThis.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} };
 globalThis.Intl = Intl;

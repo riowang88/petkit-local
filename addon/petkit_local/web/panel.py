@@ -61,6 +61,7 @@ from petkit_local.web.api.logs import (
     api_capture_delete, api_capture_download, api_capture_list, api_capture_read,
     api_device_log_read, api_device_logs, api_events, api_ws,
 )
+from petkit_local.web.api.live import api_live_mp4, api_live_ws
 from petkit_local.web.api.media import api_media_file, api_media_thumb
 from petkit_local.web.api.patchers import api_patcher_apply, api_patcher_status
 from petkit_local.web.api.pets import (
@@ -197,6 +198,8 @@ def create_panel_app(registry: DeviceRegistry, ble_registry: BLERegistry | None,
     # --- devices: list, detail, commands ---
     app.router.add_get("/api/devices", api_devices)
     app.router.add_get("/api/devices/{id}", api_device_detail)
+    app.router.add_get("/api/devices/{id}/live.mp4", api_live_mp4)
+    app.router.add_get("/api/devices/{id}/live.ws", api_live_ws)
     app.router.add_delete("/api/devices/{id}", api_device_delete)
     app.router.add_post("/api/devices/{id}/command", api_send_command)
     app.router.add_post("/api/devices/{id}/schedule", api_save_schedule)

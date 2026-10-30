@@ -72,6 +72,8 @@ SUPERVISE_INTERVAL_SECONDS = 30.0
 
 #: How long a probe result is trusted. Long on purpose — see `probe_stream`.
 PROBE_TTL_SECONDS = 600.0
+# A reboot/cooldown must not hide a recovered camera for ten minutes.
+PROBE_RETRY_SECONDS = 60.0
 
 #: The first bytes of an FLV file. An open port is NOT evidence of a stream, so
 #: this signature is what the probe actually requires.
@@ -296,7 +298,8 @@ class Go2rtc:
             if deadline > now:
                 continue
             available = await probe_stream(ip)
-            self._probes[device.petkit_id] = (now + PROBE_TTL_SECONDS, available)
+            ttl = PROBE_TTL_SECONDS if available else PROBE_RETRY_SECONDS
+            self._probes[device.petkit_id] = (now + ttl, available)
             if available:
                 device.state[STREAM_AVAILABLE] = True
             else:
