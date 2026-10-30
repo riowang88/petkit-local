@@ -17,12 +17,27 @@ from petkit_local.http.proxy import close_proxy_session
 from petkit_local.main.cli import build_config, parse_args
 from petkit_local.main.lifecycle import cleanup_background, start_background
 from petkit_local.main.wiring import build_services
+from petkit_local.utils.logredact import install_log_redaction
 
 # Every other module logs under `__name__`; this one is also an entry point, and
 # `python3 -m petkit_local.main` (what the add-on's Dockerfile runs) would make
 # that "__main__" — a useless prefix in the add-on log. Pin the module path so
 # the name is the same whether this module is imported or executed.
 log = logging.getLogger(__name__ if __name__ != "__main__" else "petkit_local.main")
+
+
+def configure_logging(level: str) -> None:
+    """Set up the process log, with secret query values redacted.
+
+    The redaction goes on the root handlers, so it covers aiohttp's access log
+    for all three servers — the device API's, the panel's and the bucket's.
+    """
+    logging.basicConfig(
+        level=getattr(logging, level),
+        format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+        stream=sys.stdout,
+    )
+    install_log_redaction()
 
 
 def main() -> None:
@@ -36,11 +51,7 @@ def main() -> None:
     args = parse_args()
     config = build_config(args)
 
-    logging.basicConfig(
-        level=getattr(logging, config.log_level),
-        format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
-        stream=sys.stdout,
-    )
+    configure_logging(config.log_level)
 
     if args.ha_addon:
         # After logging is configured, so the one line it writes is visible, and

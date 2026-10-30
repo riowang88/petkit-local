@@ -5,7 +5,8 @@ if it is about UNTRUSTED INPUT or the FILESYSTEM and knows nothing about PetKit
 itself — `coerce` (scalars that must never raise), `dicts` (traversal of device
 JSON), `paths` (containment-checked joins), `jsonio` (crash-safe persistence),
 `capture` (raw payload logging), `logtext` (bounded, never-raising rendering of
-a payload into a log line). `const` is the one deliberate exception: the
+a payload into a log line), `logredact` (secret query values kept out of the
+logs). `const` is the one deliberate exception: the
 device codename tables are pure data with no behaviour, and keeping them here is
 what lets `devices`, `ha`, `http` and `media` all answer "what kind of device is
 this?" without importing one another.
