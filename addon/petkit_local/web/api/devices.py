@@ -56,7 +56,8 @@ if TYPE_CHECKING:
 # and put the box back in service. Colouring the recovery button the same red
 # as the one you are recovering from is exactly backwards.
 DESTRUCTIVE_ACTIONS = {
-    "dump_litter", "maintenance_start", "reset_n50", "reset_n60", "reset_desiccant",
+    "dump_litter", "maintenance_start", "reset_n50", "reset_n60",
+    "reset_desiccant", "reset_bagbox",
 }
 
 

@@ -57,6 +57,8 @@ LITTER_T6_BUTTONS = [
     EntityDef(component="button", key="pack_waste", name="Pack Waste", icon="mdi:package-down"),
     EntityDef(component="button", key="open_sealed_door", name="Open Sealed Door",
               icon="mdi:door-open"),
+    EntityDef(component="button", key="reset_bagbox", name="Reset Bag Counter",
+              icon="mdi:counter"),
 ]
 
 FEEDER_BUTTONS = [

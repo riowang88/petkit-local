@@ -149,6 +149,20 @@ def _litter_end(code: int) -> Command:
     return ("end", _envelope("thing.service.end", {"end_action": code}))
 
 
+def _reset_bagbox(_device: Device) -> Command:
+    """Reset the T6 waste-bag NFC use counter through its native service.
+
+    Verified on both T6 firmware 929 and 951: after this command the device
+    reported ``packageCount`` zero, retained zero across a normal reboot, and
+    incremented it to one after a real pack cycle. The action is deliberately
+    a service of its own, not a ``start_action`` code or settings write.
+    """
+    return (
+        "reset_bagbox",
+        _envelope("thing.service.reset_bagbox", {}, ms_id=True),
+    )
+
+
 def _litter_ctrl(action_key: str, code: int) -> Command:
     """Interrupt a running litter action (pause/resume).
 
@@ -202,6 +216,7 @@ LITTER_ACTIONS = {
     "light": lambda device: _litter_start(7),
     "pack_waste": lambda device: _litter_start(8),
     "open_sealed_door": lambda device: _litter_start(11),
+    "reset_bagbox": _reset_bagbox,
     # no localkit reference; best-effort control verbs
     "pause": lambda device: _litter_ctrl("stop_action", 0),
     "resume": lambda device: _litter_ctrl("continue_action", 0),

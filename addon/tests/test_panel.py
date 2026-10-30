@@ -419,6 +419,31 @@ async def test_command_sender_queues_without_bridge():
         await c.close()
 
 
+async def test_t6_bag_reset_is_destructive_and_queues_native_service():
+    reg = DeviceRegistry()
+    reg.get_or_create(petkit_id=1, device_type="t6", serial_number="SN6")
+    app, reg, hub = _panel(reg=reg, bridge=None)
+    c = await _mk_client(app)
+    try:
+        detail = await (await c.get("/api/devices/1")).json()
+        action = next(a for a in detail["actions"] if a["key"] == "reset_bagbox")
+        assert action["destructive"] is True
+
+        response = await c.post(
+            "/api/devices/1/command",
+            data=json.dumps({"action": "reset_bagbox"}),
+        )
+        payload = await response.json()
+        assert response.status == 200
+        assert payload["ok"] and payload["delivered"] == "heartbeat-queue"
+        queued = reg.get(1).command_queue[-1]
+        assert queued["_service_suffix"] == "reset_bagbox"
+        assert queued["method"] == "thing.service.reset_bagbox"
+        assert queued["params"] == {}
+    finally:
+        await c.close()
+
+
 async def test_action_form_records_a_consumable_reset_like_the_entity_form():
     """Pressing Reset N50 in the PANEL has to stamp the date, as HA's does.
 

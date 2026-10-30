@@ -320,7 +320,7 @@ def test_cancel_on_an_esp32_feeder_is_left_alone():
 def test_every_button_maps_to_an_action():
     # Coherence: every button entity across all device types must resolve to a
     # known action, else pressing it silently does nothing.
-    for dtype in ("t5", "t4", "d4h", "d4", "w7h", "w5"):
+    for dtype in ("t5", "t6", "t4", "d4h", "d4", "w7h", "w5"):
         d = Device(device_type=dtype, petkit_id=99, serial_number="X")
         for e in get_entities_for_device(d):
             if e.component == "button":
@@ -423,6 +423,7 @@ def test_a_purobot_ultra_has_no_n50_button_and_a_pack_one_instead():
     assert "reset_n60" in t6, "only the N50 button is excluded"
     assert "pack_waste" in t6
     assert "open_sealed_door" in t6
+    assert "reset_bagbox" in t6
 
     _, t5 = _litter()
     assert "reset_n50" in t5, "other boxes keep the button they have always had"
@@ -440,6 +441,16 @@ def test_the_t6_buttons_send_the_action_the_app_sent(key, code):
     assert suffix == "start"
     assert env["method"] == "thing.service.start"
     assert env["params"] == {"start_action": code}
+
+
+def test_the_t6_bag_reset_uses_its_native_service():
+    """Both 929 and 951 responded to this service with the bag count reset."""
+    d, idx = _t6()
+    suffix, env = handle_ha_command(d, idx["reset_bagbox"], "")
+    assert suffix == "reset_bagbox"
+    assert env["method"] == "thing.service.reset_bagbox"
+    assert env["params"] == {}
+    assert env["id"].isdigit() and int(env["id"]) < 2**31
 
 
 def test_light_is_a_start_action_on_a_camera_box_only():
