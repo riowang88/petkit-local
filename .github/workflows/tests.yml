@@ -11,14 +11,17 @@ permissions:
 #
 #   gh api repos/docker/build-push-action/commits/v6 --jq .sha
 
+# On main this runs only as the first job of publish.yml, which calls it, so a
+# push is tested once and the image waits for the result.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
 
-# A new push supersedes an in-flight run for the same ref.
+# A new push supersedes an in-flight run for the same ref. The group is a
+# literal rather than `github.workflow`: under workflow_call that expression
+# names the CALLER, and sharing publish.yml's group would cancel it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: tests-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:

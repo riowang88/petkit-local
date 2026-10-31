@@ -17,19 +17,17 @@
 
 services:
   petkit-local:
-    # Published by .github/workflows/publish.yml, and the same image the
-    # Home Assistant app pulls. One multi-architecture package covering amd64,
-    # arm64 and armv7, so Docker picks the right platform on its own — you do
-    # not choose one.
+    # This fork's image (Chinese panel, T6 camera controls), published to
+    # Docker Hub by .github/workflows/publish.yml. One multi-architecture
+    # package covering amd64, arm64 and armv7, so Docker picks the right
+    # platform on its own — you do not choose one.
     #
-    #   :latest   the newest release
-    #   :2.0.0    a release you pin, so nothing moves until you say so
-    #   :dev      the last commit on main. Untested by definition; use it to try
-    #             a fix before it ships, with `docker compose up -d --pull always`
-    #             (a moving tag is cached by digest, so Compose will not refetch
-    #             it on its own). To hold one exact build, use its digest:
-    #             ghcr.io/alex-so-3/petkit-local@sha256:...
-    image: ghcr.io/alex-so-3/petkit-local:latest
+    #   :latest   the last commit on main that passed the tests
+    #   :<sha>    one exact commit, so nothing moves until you say so
+    #
+    # `latest` moves, and Compose caches a moving tag by digest, so update with
+    # `docker compose pull && docker compose up -d`.
+    image: rio22/petkit-local:latest
     #
     # To build it yourself instead — a local change, or an architecture nobody
     # publishes — comment out the line above and uncomment this, then

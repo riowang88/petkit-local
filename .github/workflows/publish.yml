@@ -1,24 +1,31 @@
 name: publish
 
-# Home Assistant's Supervisor pulls `image:` from config.yaml at the add-on's
-# own version, so a tag named after a version is a PROMISE that that version is
-# released. Pushes to main therefore publish only `dev`, which always points at
-# the last commit; the version and `latest` are cut by a `v*` git tag and
-# nothing else. Without that split,
-# working on main would overwrite the released version's image with unreleased
-# code, and every user updating would get it.
+# This fork is deployed as a plain container (docker-compose.yml at the root),
+# not through the Home Assistant Supervisor, so it publishes to Docker Hub with
+# the same two repository secrets the other projects here use:
 #
-# ONE image, multi-arch. That is what the add-on documentation asks for --
-# `{arch}` in the image name is described there as a compatibility fallback --
-# and it is also what docker-compose needs, since Compose has no `{arch}`
-# substitution. So the three architectures build in parallel, are pushed into
-# the same package BY DIGEST (no tag, so the jobs cannot race for one), and a
-# manifest list is assembled from them afterwards.
+#   DOCKERHUB_USERNAME   the Docker Hub account
+#   DOCKERHUB_TOKEN      an access token with Read & Write on that account
+#
+# Tags:
+#   push to main  -> `latest` and the full commit SHA
+#   `v*` git tag  -> the version (which must match config.yaml), plus `latest`
+#                    and the commit SHA
+# The SHA tag is what you pin a NAS to when `latest` must not move under it.
+#
+# Images are built only after the test suite passes (tests.yml is called below
+# rather than run beside this), so a red commit never becomes `latest`.
+#
+# ONE image, multi-arch. Compose has no `{arch}` substitution, so the three
+# architectures build in parallel, are pushed into the same repository BY
+# DIGEST (no tag, so the jobs cannot race for one), and a manifest list is
+# assembled from them afterwards.
+#
 # Third-party actions are pinned to a commit SHA, not a tag. `@v6` is a moving
 # tag: whoever controls that repository can point it at new code, which then
-# runs here — and `publish` runs with `packages: write`. That has happened in
-# the wild. The trailing comment is the release each SHA belongs to; to update
-# one, resolve the tag yourself rather than trusting the comment:
+# runs here with the Docker Hub token in reach. The trailing comment is the
+# release each SHA belongs to; to update one, resolve the tag yourself rather
+# than trusting the comment:
 #
 #   gh api repos/docker/build-push-action/commits/v6 --jq .sha
 
@@ -26,19 +33,24 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+  workflow_dispatch:
 
-# The built-in GITHUB_TOKEN can push to ghcr.io/<owner>/* once it is allowed to.
-# No PAT and no repository secret is involved.
 permissions:
   contents: read
-  packages: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  IMAGE: docker.io/rio22/petkit-local
+
 jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
   build:
+    needs: tests
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -55,14 +67,8 @@ jobs:
 
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # A registry path must be lowercase; a GitHub owner need not be.
-      - name: Registry path
-        id: image
-        run: echo "ref=ghcr.io/$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push by digest
         id: build
@@ -73,7 +79,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-          outputs: type=image,name=${{ steps.image.outputs.ref }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
@@ -101,9 +107,8 @@ jobs:
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -114,37 +119,40 @@ jobs:
       - name: Assemble the manifest and name it
         run: |
           set -eu
-          image="ghcr.io/$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          tags="-t ${IMAGE}:latest -t ${IMAGE}:${GITHUB_SHA}"
 
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             # Refuse a tag that disagrees with config.yaml rather than
-            # publishing an image the Supervisor will never ask for: it pulls
-            # by the version in that file and nothing else.
+            # publishing a version name the code does not carry.
             declared=$(sed -n 's/^version: *"\(.*\)"$/\1/p' addon/config.yaml)
             version="${GITHUB_REF_NAME#v}"
             if [ "$declared" != "$version" ]; then
               echo "::error::tag $GITHUB_REF_NAME does not match config.yaml version $declared"
               exit 1
             fi
-            primary="$version"
-            tags="-t ${image}:${version} -t ${image}:latest"
-          else
-            # Just the one moving tag. A per-commit tag would be a second name
-            # for something the digest already identifies permanently, and it
-            # would leave a tagged version behind on every push -- which GitHub
-            # then shows as the package's headline, offering a `docker pull` of
-            # an unreleased build to anyone who lands on the page.
-            # `org.opencontainers.image.revision` on the image itself is what
-            # maps a build back to its commit.
-            primary="dev"
-            tags="-t ${image}:dev"
+            tags="$tags -t ${IMAGE}:${version}"
           fi
 
           sources=""
           for d in /tmp/digests/*; do
-            sources="$sources ${image}@sha256:$(basename "$d")"
+            sources="$sources ${IMAGE}@sha256:$(basename "$d")"
           done
 
           # shellcheck disable=SC2086
           docker buildx imagetools create $tags $sources
-          docker buildx imagetools inspect "${image}:${primary}"
+          docker buildx imagetools inspect "${IMAGE}:${GITHUB_SHA}"
+
+      # The manifest list must name all three platforms, or a NAS on the
+      # missing one pulls nothing.
+      - name: Verify every platform is in the manifest
+        run: |
+          set -eu
+          platforms=$(docker buildx imagetools inspect "${IMAGE}:${GITHUB_SHA}" --format '{{json .Manifest}}' \
+            | python3 -c 'import json,sys; m=json.load(sys.stdin); print(" ".join(sorted(p["platform"]["os"]+"/"+p["platform"]["architecture"]+("/"+p["platform"]["variant"] if p["platform"]["architecture"]=="arm" and p["platform"].get("variant") else "") for p in m["manifests"] if p["platform"]["os"]!="unknown")))')
+          echo "platforms: $platforms"
+          for want in linux/amd64 linux/arm64 linux/arm/v7; do
+            case " $platforms " in
+              *" $want "*) ;;
+              *) echo "::error::$want missing from ${IMAGE}:${GITHUB_SHA}"; exit 1 ;;
+            esac
+          done
