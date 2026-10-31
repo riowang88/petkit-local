@@ -1,5 +1,31 @@
 # PetKit Local
 
+> **关于本仓库 / About this fork**
+>
+> 本仓库是 [alex-so-3/petkit-local](https://github.com/alex-so-3/petkit-local) 的修改版（fork）。
+> 原项目作者为 **alex.so.3**，以 GNU GPL v3.0 发布。本仓库沿用同一许可证，原有的 `LICENSE`、
+> 版权声明和下方的 Credits 均原样保留；除下列新增部分外，代码与设计都来自原项目。
+>
+> 本仓库新增：
+> - 网页面板简体中文界面
+> - 面板内实时视频（经 go2rtc 转发），以及缺流原因提示、go2rtc 流的就地更新
+> - 进程日志与面板实时日志中对 `secret` 等查询参数打码
+> - T6 居家/隐私模式开关（`home_mode` / `camera_inward` / `camera_off` / `no_sound`）与只读 `camera_position`
+> - T6 云台左/右/翻转按钮；设备端 helper 由 `addon/tools/ptz-helper/build_ptz.py` 逐字节生成，不含厂商代码
+> - T6 `reset_bagbox`（重置垃圾袋使用计数）
+>
+> 以上改动只在 PETKIT T6（固件 951、929）上实测过。
+>
+> **免责声明**：本项目为非官方项目，与 PETKIT（小佩）没有任何隶属、授权或背书关系。仅供在你自己的设备、
+> 自己的局域网内使用，按“现状”提供，不提供任何担保，使用风险自负。`reset_bagbox` 只调用设备自带的服务把垃圾袋
+> 计数归零，不克隆或绕过耗材标签，也不修改设备系统。
+>
+> *English:* A modified fork of alex-so-3/petkit-local by alex.so.3, released under GPL-3.0 like the
+> original. It adds a Simplified Chinese panel, an in-panel live camera viewer, log redaction, T6 privacy
+> settings, T6 camera pan/flip buttons and the T6 `reset_bagbox` action, tested on T6 firmware 951/929 only.
+> Unofficial and not affiliated with PETKIT; provided as is, without warranty, for use with your own
+> devices on your own network.
+
 PetKit's devices route everything through PetKit's servers: the app, the history, the notifications,
 and the video from inside your home. This is a stand-in for those servers that runs on your own
 machine. Your device connects to it the same way it connected to them and behaves the same, except
