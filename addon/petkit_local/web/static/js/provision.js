@@ -87,6 +87,12 @@ async function loadProvision() {
   PROV_INFO = await api('info');
   const srv = document.getElementById('p-server');
   if (!srv.value) srv.value = PROV_INFO.api_url || '';
+  const ssidField = document.getElementById('p-ssid');
+  if (!ssidField.value) {
+    try {
+      ssidField.value = localStorage.getItem('provSsid') || '';
+    } catch (_) {}
+  }
   const tz = document.getElementById('p-tz');
   // Only fill it once, so re-opening the tab does not discard a chosen value.
   if (tz && !tz.options.length) tz.innerHTML = tzOptions(-new Date().getTimezoneOffset() / 60);
@@ -636,6 +642,12 @@ async function doProvision() {
     toast('请填写 Wi-Fi 名称和密码。');
     return;
   }
+  // The name only, never the password. A browser cannot read which network it
+  // is on, so this is the nearest thing to filling it in for you; losing it to
+  // a private window or cleared storage just means typing it once more.
+  try {
+    localStorage.setItem('provSsid', ssid);
+  } catch (_) {}
   document.getElementById('p-log').textContent = '';
   let gatt = null;
   try {

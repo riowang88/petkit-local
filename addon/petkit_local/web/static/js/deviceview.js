@@ -35,6 +35,11 @@ const GLYPHS = {
   speaker: '<path d="M5 9.5v5h3.5L13 18.5v-13L8.5 9.5z"/><path d="M16 9a4 4 0 0 1 0 6"/>',
   video:
     '<rect x="3.5" y="6" width="12.5" height="12" rx="2.5"/><path d="M16 10.5l4.5-2.5v8L16 13.5z"/>',
+  bag: '<path d="M6.5 8.5h11l1.2 11.5H5.3z"/><path d="M9 8.5V7a3 3 0 0 1 6 0v1.5"/>',
+  door: '<rect x="6" y="3.5" width="12" height="17" rx="1.5"/><path d="M14.5 12h.5"/>',
+  left: '<path d="M14.5 6l-6 6 6 6"/>',
+  right: '<path d="M9.5 6l6 6-6 6"/>',
+  flip: '<path d="M5 9a7.5 7.5 0 0 1 13-2l1.5 2M19 15a7.5 7.5 0 0 1-13 2l-1.5-2"/><path d="M19.5 4.5V9H15M4.5 19.5V15H9"/>',
   more: '<circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/>',
   dot: '<circle cx="12" cy="12" r="3"/>',
 };
@@ -82,8 +87,10 @@ function deviceStatus(d) {
   const fault = deviceFault(d);
   if (fault) return { text: fault, tone: 'bad' };
   const st = entity(d, 'device_status');
-  if (hasValue(st)) return { text: plain(st), tone: 'ok' };
-  return { text: '在线', tone: 'ok' };
+  // -1 is what a box reports when no work is running: not one of the mapped
+  // work modes, and printing it would put a bare "-1" in the page's largest type.
+  if (hasValue(st) && Number(st.value) !== -1) return { text: plain(st), tone: 'ok' };
+  return { text: st ? '待机' : '在线', tone: 'ok' };
 }
 
 //: Conditions that need a person, phrased as what to do about them. Worded here
@@ -140,6 +147,8 @@ const ACTION_TILES = {
   cleaning_start: 'sparkle',
   deodorize: 'wind',
   level_litter: 'level',
+  pack_waste: 'bag',
+  open_sealed_door: 'door',
   light: 'bulb',
   feed: 'bowl',
   feed_hopper_1: 'bowl',
@@ -160,6 +169,9 @@ const RUN_CONTROLS = {
   reset: 'stop',
   cancel_manual_feed: 'stop',
 };
+//: The T6's camera head. Aimed while looking at the picture, so it stays on the
+//: page rather than in the More menu.
+const CAMERA_CONTROLS = { ptz_left: 'left', ptz_right: 'right', ptz_flip: 'flip' };
 //: Actions that belong to one consumable, drawn on that consumable's row: "reset
 //: N50" means nothing in a row of buttons and is obvious next to "N50: 3 days".
 const CONSUMABLE_ACTIONS = {
@@ -167,6 +179,7 @@ const CONSUMABLE_ACTIONS = {
   reset_n60: 'n60_spray_days',
   reset_desiccant: 'desiccant_days',
   reset_filter: 'filter_percent',
+  reset_bagbox: 'package_count',
   food_replenished: 'hopper_level',
 };
 
@@ -175,27 +188,29 @@ function actionAttrs(d, a) {
   return `data-action="send-action" data-id="${esc(d.id)}" data-key="${esc(a.key)}" data-destructive="${a.destructive ? 1 : 0}" data-name="${esc(name)}"`;
 }
 
+// The row a consumable's action lands on, or null when the device has no such
+// row. An entity is enough: a cartridge that has not reported yet must still be
+// resettable, and from where it would otherwise be looked for.
+function actionRow(d, key) {
+  const row = CONSUMABLE_ACTIONS[key];
+  if (!row) return null;
+  if (entity(d, row)) return row;
+  return key === 'reset_filter' && entity(d, 'filter_days') ? 'filter_days' : null;
+}
+
 function splitActions(d) {
-  const present = new Set((d.entities || []).filter(hasValue).map(e => e.key));
-  const onRow = a => {
-    const row = CONSUMABLE_ACTIONS[a.key];
-    if (!row) return false;
-    // Only moved if its row exists; a filter nobody has reported yet must still
-    // be resettable, and the fallback for that is the More menu.
-    return row === 'filter_percent'
-      ? present.has('filter_percent') || present.has('filter_days')
-      : present.has(row);
-  };
   const tiles = [],
     run = [],
+    camera = [],
     more = [];
   for (const a of d.actions || []) {
-    if (onRow(a)) continue;
-    if (RUN_CONTROLS[a.key]) run.push(a);
+    if (actionRow(d, a.key)) continue;
+    if (CAMERA_CONTROLS[a.key]) camera.push(a);
+    else if (RUN_CONTROLS[a.key]) run.push(a);
     else if (ACTION_TILES[a.key] && !a.destructive) tiles.push(a);
     else more.push(a);
   }
-  return { tiles, run, more };
+  return { tiles, run, camera, more };
 }
 
 // Where a press goes. Stated on the page rather than tucked behind a `?`,
@@ -219,8 +234,17 @@ function moreMenu(d, more) {
 }
 
 function actionsBlock(d) {
-  const { tiles, run, more } = splitActions(d);
-  if (!tiles.length && !run.length && !more.length) return '';
+  const { tiles, run, camera, more } = splitActions(d);
+  if (!tiles.length && !run.length && !camera.length && !more.length) return '';
+  const group = (label, list, icons) =>
+    list.length
+      ? `<div class="run-ctl" role="group" aria-label="${esc(label)}">${list
+          .map(
+            a =>
+              `<button ${actionAttrs(d, a)}>${glyph(icons[a.key])}<span>${esc(entityName(a.key, a.name))}</span></button>`,
+          )
+          .join('')}</div>`
+      : '';
   return `<section class="sgroup">
     <div class="sgroup-head"><h3>操作</h3><span class="grow"></span>${moreMenu(d, more)}</div>
     ${
@@ -234,16 +258,8 @@ function actionsBlock(d) {
         : ''
     }
     <div class="run-row">
-      ${
-        run.length
-          ? `<div class="run-ctl" role="group" aria-label="运行控制">${run
-              .map(
-                a =>
-                  `<button ${actionAttrs(d, a)}>${glyph(RUN_CONTROLS[a.key])}<span>${esc(entityName(a.key, a.name))}</span></button>`,
-              )
-              .join('')}</div>`
-          : ''
-      }
+      ${group('运行控制', run, RUN_CONTROLS)}
+      ${group('摄像头方向', camera, CAMERA_CONTROLS)}
       <span class="cmd-out mut">${esc(transportNote(d))}</span>
     </div>
   </section>`;
@@ -261,21 +277,17 @@ const CONSUMABLES = [
   ['n60_spray_days', 'N60 除臭液'],
   ['desiccant_days', '干燥剂'],
   ['hopper_level', '粮仓'],
+  ['package_count', '剩余垃圾袋'],
   ['battery', '电量'],
 ];
 const LOW_PERCENT = 20;
 
 function consumableRow(d, key, label) {
   const e = entity(d, key);
-  if (!hasValue(e)) return '';
-  const pct = e.unit === '%' ? Math.max(0, Math.min(100, Number(e.value))) : null;
-  const action = (d.actions || []).find(a => {
-    if (CONSUMABLE_ACTIONS[a.key] === key) return true;
-    // The filter has two rows and one reset; it goes on the first that exists.
-    return (
-      key === 'filter_days' && a.key === 'reset_filter' && !hasValue(entity(d, 'filter_percent'))
-    );
-  });
+  if (!e) return '';
+  const action = (d.actions || []).find(a => actionRow(d, a.key) === key);
+  if (!hasValue(e) && !action) return '';
+  const pct = e.unit === '%' && hasValue(e) ? Math.max(0, Math.min(100, Number(e.value))) : null;
   return `<div class="supply">
     <div class="supply-line"><span>${esc(label)}</span><b>${esc(plain(e))}</b>${
       action
@@ -352,6 +364,11 @@ function heroBlock(d, sessions) {
     <div class="hero-text">
       <div class="hero-state ${esc(st.tone)}">${esc(st.text)}</div>
       <dl class="hero-stats">${heroStats(d) || '<div><dd class="mut">设备还没有上报数据</dd></div>'}</dl>
+      ${
+        d.is_camera && !d.state?.streamAvailable
+          ? '<p class="sub hero-note">设备没有提供本地视频流，实时画面需要先应用<a data-action="goto-tab" data-tab="patchers">设备补丁</a>中的“本地摄像头视频”。</p>'
+          : ''
+      }
     </div>
   </section>`;
 }
@@ -388,6 +405,7 @@ const SETTING_GROUPS = [
     '摄像头',
     'camera camera_upload microphone micro_light night_vision smart_frame video_timestamp time_display',
   ],
+  ['隐私', 'home_mode camera_inward camera_off no_sound'],
   [
     '检测',
     'pet_detection wander_detection toilet_detection move_detection eat_detection drink_detection vomit_detection yowling_detection ph_detection',
