@@ -195,4 +195,4 @@ onAction('gal-step', el => {
   renderGallery();
 });
 
-export { mediaThumbs, observeLazyVideos, closeModal, _has };
+export { mediaThumbs, observeLazyVideos, closeModal, _has, thumbUrl };

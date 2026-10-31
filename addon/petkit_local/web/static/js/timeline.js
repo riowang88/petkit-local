@@ -152,29 +152,21 @@ function visibleFilters(counts) {
 }
 
 function controlsHtml(ds, pets, counts) {
-  return `<div class="card" data-tlkey="controls">
-    <div class="row" style="align-items:center;margin-bottom:10px">
-      <button class="ghost act" data-action="tl-shift" data-n="-1">◂</button>
-      <input type="date" id="tlDate" value="${esc(TL_DATE)}" data-change="tl-date" style="width:auto">
-      <button class="ghost act" id="tlNext" data-action="tl-shift" data-n="1">▸</button>
+  return `<div class="tl-bar" data-tlkey="controls">
+    <div class="tl-bar-row">
+      <div class="stepper">
+        <button class="ghost act" data-action="tl-shift" data-n="-1" aria-label="前一天">‹</button>
+        <input type="date" id="tlDate" value="${esc(TL_DATE)}" data-change="tl-date" style="width:auto">
+        <button class="ghost act" id="tlNext" data-action="tl-shift" data-n="1" aria-label="后一天">›</button>
+      </div>
       <select id="tlDevice" data-change="tl-device" style="width:auto">
         <option value="">所有设备</option>
         ${ds.map(d => `<option value="${esc(d.id)}">${esc(d.name)} #${esc(d.id)}</option>`).join('')}
       </select>
       <span class="grow"></span>
+      <label class="mut tl-dbgtog"><input type="checkbox" data-change="tl-debug"> 调试信息</label>
     </div>
-    ${
-      pets.length
-        ? `<div class="row tl-filterbar" style="align-items:center">
-      <div class="chips" role="group" aria-label="按宠物筛选">
-        <button class="chip-btn" data-action="tl-pet" data-k="">所有宠物</button>
-        ${pets.map(petChip).join('')}
-      </div>
-      <span class="grow"></span>
-    </div>`
-        : ''
-    }
-    <div class="row tl-filterbar" style="align-items:center">
+    <div class="tl-bar-row">
       <div class="chips">
         ${visibleFilters(counts)
           .map(
@@ -183,8 +175,14 @@ function controlsHtml(ds, pets, counts) {
           )
           .join('')}
       </div>
-      <span class="grow"></span>
-      <label class="mut tl-dbgtog"><input type="checkbox" data-change="tl-debug"> 调试信息</label>
+      ${
+        pets.length
+          ? `<div class="chips" role="group" aria-label="按宠物筛选">
+        <button class="chip-btn" data-action="tl-pet" data-k="">所有宠物</button>
+        ${pets.map(petChip).join('')}
+      </div>`
+          : ''
+      }
     </div>
   </div>`;
 }
@@ -460,6 +458,9 @@ function dbgBody(d) {
   </div>`;
 }
 
+//: The server's decoded facts are English words; these are the ones it emits.
+const BIT_LABELS = { waste: '有排泄物', litter: '猫砂', yowled: '叫声' };
+
 function sessionCard(s) {
   const tag = KIND_TAG[s.event_kind] || (s.event_kind || 'event').replace(/_/g, ' ');
   const cls = KIND_CLASS[s.event_kind] || '';
@@ -481,7 +482,8 @@ function sessionCard(s) {
     // matching the pattern above. A bit with no number ("waste", "yowled")
     // has nothing to bold and is printed as-is.
     const m = String(b).match(/^(\D+?)\s+(\d.*)$/);
-    facts.push(m ? `${esc(m[1])} <b>${esc(m[2])}</b>` : esc(b));
+    const word = BIT_LABELS[m ? m[1] : b] || (m ? m[1] : b);
+    facts.push(m ? `${esc(word)} <b>${esc(m[2])}</b>` : esc(word));
   }
   const factsHtml = facts.map(f => `<span class="tl-nb">${f}</span>`).join(' · ');
 

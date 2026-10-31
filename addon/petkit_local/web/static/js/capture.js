@@ -7,7 +7,7 @@ async function loadCapture() {
   const v = document.getElementById('capView');
   const what =
     '<p class="sub">流量记录将设备的 HTTP 请求、响应和 MQTT 帧原样写入 <code>.jsonl</code> 文件，用于协议分析或连接排查。</p>' +
-    '<div class="card" style="border-color:var(--warn);margin:0 0 14px"><p style="margin:0"><b>⚠ 所有流量记录都包含敏感信息。</b> 这些文件原样记录设备收发的数据，不作过滤，可能包含 <b>Wi-Fi 名称</b>、局域网地址、设备序列号及签名密钥。<b>代理</b>记录还可能包含与 PETKIT 的完整通信及<b>账号凭据</b>。分享之前必须检查内容。</p></div>';
+    '<div class="card notice"><b>所有流量记录都包含敏感信息。</b> 文件原样记录设备收发的数据，可能包含 Wi-Fi 名称、局域网地址、设备序列号及签名密钥；<b>代理</b>记录还可能包含账号凭据。分享之前必须检查内容。</div>';
   if (!c.enabled) {
     v.innerHTML =
       '<h3>流量记录已关闭</h3>' +

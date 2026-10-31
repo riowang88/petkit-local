@@ -10,7 +10,7 @@
  *   TOKENS        colours and the one layout variable, light and dark
  *   BASE          reset, typography, links, the shared .row/.col/.sw/.stbl
  *   CONTROLS      buttons, inputs, switches
- *   DEVICE PANELS one collapsible <details> per device
+ *   DEVICE PANELS the rows and labels of a device's panes
  *   SCHEDULES     the editors inside a device panel
  *   AI / PETS     the pet list, its mugshots and the face cropper
  *   LOG           the live traffic view and the device-log viewer
@@ -18,38 +18,72 @@
  *   MODAL         the media lightbox
  *   RESPONSIVE    the narrow-screen overrides that are not inline above
  *   HELP          the `?` popover, parented to <body>
+ *   DEVICE PAGE   the overview, a device's segmented panes, tiles and supplies
+ *   PAGES         the single-column forms, the log console, the timeline rail
  *
  * Prettier-formatted, and CI checks it:
  *   npx prettier@3 --write addon/petkit_local/web/static/styles.css
  */
 
 /* ==== TOKENS ==== */
+/* macOS system colours, light and dark, so the panel sits next to a native
+   app without looking borrowed. Named for their AppKit counterparts where one
+   exists: --fg is labelColor, --mut secondaryLabelColor, --line
+   separatorColor, --accent controlAccentColor (the default blue). The status
+   colours are systemGreen/Red/Orange — the dark variants are Apple's own,
+   brighter so they keep their contrast on a dark window. */
 :root {
   color-scheme: light dark;
   /* Timeline time column. Overridden to a wider value by `sizeTimeColumn()` in
      timeline.js when the viewer's locale renders 12-hour times, which are 3-4
      characters longer and used to overrun this track onto the row's content. */
   --tl-time-w: 70px;
-  --bg: #f4f6f8;
+  --sidebar-w: 228px;
+  --bg: #ececee;
+  --sidebar: rgb(232 232 236 / 80%);
   --card: #fff;
-  --card2: #f9fafb;
-  --fg: #1c1e21;
-  --mut: #6b7280;
-  --line: #e3e6ea;
-  --accent: #0aa2e6;
-  --accent2: #0284c7;
-  --ok: #16a34a;
-  --bad: #ef4444;
-  --warn: #f59e0b;
+  --card2: #f6f6f8;
+  --control: #fff;
+  --field: #fff;
+  --fg: #1d1d1f;
+  --mut: rgb(60 60 67 / 62%);
+  --line: rgb(60 60 67 / 15%);
+  --hover: rgb(0 0 0 / 5%);
+  --accent: #007aff;
+  --accent2: #0062cc;
+  --ok: #34c759;
+  --bad: #ff3b30;
+  /* Red as text on a control face. Same hue as --bad in light mode; lifted in
+     dark, where systemRed on a grey button falls under 3:1. */
+  --bad-text: #e0281e;
+  --warn: #ff9500;
+  --purple: #af52de;
+  --ring: color-mix(in srgb, var(--accent) 45%, transparent);
+  --shadow-control: 0 0.5px 1px rgb(0 0 0 / 14%), 0 0 0 0.5px rgb(0 0 0 / 10%);
+  --shadow-window: 0 22px 70px rgb(0 0 0 / 28%), 0 0 0 0.5px rgb(0 0 0 / 18%);
+  --mono: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1216;
-    --card: #1a1e24;
-    --card2: #20262d;
-    --fg: #e6e8eb;
-    --mut: #9aa4b2;
-    --line: #2a2f36;
+    --bg: #1e1e1e;
+    --sidebar: rgb(44 44 46 / 78%);
+    --card: #2a2a2c;
+    --card2: #323234;
+    --control: #48484b;
+    --field: rgb(255 255 255 / 6%);
+    --fg: #f5f5f7;
+    --mut: rgb(235 235 245 / 58%);
+    --line: rgb(255 255 255 / 11%);
+    --hover: rgb(255 255 255 / 6%);
+    --accent: #0a84ff;
+    --accent2: #409cff;
+    --ok: #30d158;
+    --bad: #ff453a;
+    --bad-text: #ff8a82;
+    --warn: #ff9f0a;
+    --purple: #bf5af2;
+    --shadow-control: 0 0.5px 1px rgb(0 0 0 / 40%), inset 0 0.5px 0 rgb(255 255 255 / 12%);
+    --shadow-window: 0 22px 70px rgb(0 0 0 / 60%), 0 0 0 0.5px rgb(255 255 255 / 14%);
   }
 }
 /* ==== BASE ==== */
@@ -63,75 +97,178 @@ body {
 body {
   margin: 0;
   font:
-    14px/1.5 system-ui,
-    -apple-system,
-    Segoe UI,
-    Roboto,
+    13px/1.45 -apple-system,
+    BlinkMacSystemFont,
+    'SF Pro Text',
+    'PingFang SC',
+    'Helvetica Neue',
+    'Microsoft YaHei',
+    system-ui,
     sans-serif;
+  -webkit-font-smoothing: antialiased;
   background: var(--bg);
   color: var(--fg);
 }
-header {
+:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 1px;
+}
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+/* ---- the window: sidebar | content ---- */
+.app {
   display: flex;
-  gap: 14px;
-  align-items: center;
-  padding: 10px 16px;
-  background: var(--card);
-  border-bottom: 1px solid var(--line);
+  min-height: 100vh;
+}
+/* The source list. Translucent over the window like a native sidebar, and
+   sticky rather than fixed so the stale-build banner can sit above the whole
+   window without being covered. */
+.sidebar {
+  flex: none;
+  width: var(--sidebar-w);
   position: sticky;
   top: 0;
-  z-index: 5;
-  flex-wrap: wrap;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 0 10px 16px;
+  background: var(--sidebar);
+  backdrop-filter: saturate(180%) blur(30px);
+  -webkit-backdrop-filter: saturate(180%) blur(30px);
+  border-right: 0.5px solid var(--line);
 }
-header h1 {
-  font-size: 15px;
-  margin: 0;
-  font-weight: 700;
-  letter-spacing: 0.2px;
+.brand {
   display: flex;
-  gap: 6px;
   align-items: center;
+  gap: 8px;
+  height: 52px;
+  margin: 0;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.brand-mark {
+  font-size: 15px;
 }
 nav {
   display: flex;
-  gap: 2px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 1px;
 }
 nav button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
   background: none;
   border: 0;
-  color: var(--mut);
-  padding: 7px 13px;
-  border-radius: 9px;
-  cursor: pointer;
+  color: var(--fg);
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: default;
+  font: inherit;
   font-size: 13px;
-  font-weight: 500;
+  text-align: left;
 }
 nav button:hover {
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--hover);
 }
 nav button.on {
   background: var(--accent);
   color: #fff;
 }
+/* System Settings' rounded-square icons: one colour per section, so a section
+   can be found by colour before its name is read. */
+.ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: linear-gradient(rgb(255 255 255 / 18%), transparent), var(--ico);
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 10%);
+}
+.ico svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ico svg.fill {
+  fill: #fff;
+  stroke: none;
+}
+nav button.on .ico {
+  box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 30%);
+}
+.nav-group {
+  margin: 14px 8px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mut);
+}
+.nav-sep {
+  height: 0.5px;
+  margin: 10px 8px;
+  background: var(--line);
+}
+.content {
+  flex: 1;
+  min-width: 0;
+}
+/* The unified toolbar: the section's name where a window title would be, and
+   the live-connection state at the trailing edge. */
+.toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  height: 52px;
+  padding: 0 20px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid var(--line);
+}
+.toolbar h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
 .grow {
   flex: 1;
 }
+/* The live-connection state. A dot plus a word, like a native status item —
+   a bordered capsule was the only outlined shape in the toolbar. */
 .pill {
-  font-size: 11px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
   color: var(--mut);
   white-space: nowrap;
 }
-.pill.ok {
-  color: var(--ok);
-  border-color: var(--ok);
+.pill::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mut);
+}
+.pill.ok::before {
+  background: var(--ok);
 }
 .pill.bad {
   color: var(--bad);
-  border-color: var(--bad);
+}
+.pill.bad::before {
+  background: var(--bad);
 }
 .badge {
   /* inline-block, not inline: an inline box breaks between words and the
@@ -143,68 +280,70 @@ nav button.on {
   display: inline-block;
   max-width: 100%;
   font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: rgba(127, 127, 127, 0.14);
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mut) 16%, transparent);
   color: var(--mut);
 }
 .badge.ok {
-  background: rgba(22, 163, 74, 0.16);
-  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: color-mix(in srgb, var(--ok) 75%, var(--fg));
 }
 .badge.off {
-  background: rgba(107, 114, 128, 0.16);
+  background: color-mix(in srgb, var(--mut) 14%, transparent);
   color: var(--mut);
 }
 .badge.bad {
-  background: rgba(239, 68, 68, 0.16);
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
   color: var(--bad);
 }
 .badge.warn {
-  background: rgba(245, 158, 11, 0.18);
-  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: color-mix(in srgb, var(--warn) 80%, var(--fg));
 }
 /* A transport, not a health state — which is why it is the accent colour and
    not one of the four above. A BLE accessory is neither "ok" (green means a
    live MQTT session, which it can never have) nor "off". */
 .badge.ble {
-  background: rgba(10, 162, 230, 0.16);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent);
 }
 main {
-  padding: 16px;
-  max-width: 1140px;
+  padding: 20px 24px 32px;
+  max-width: 1180px;
   margin: 0 auto;
 }
 .hidden {
   display: none !important;
 }
+/* A grouped box, as System Settings draws one: white on the grey window, a
+   hairline edge, no drop shadow — depth is for windows and sheets. */
 .card {
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 16px;
-  margin-bottom: 14px;
+  border: 0.5px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
 }
 /* A warning card. The default `.card` is the same neutral grey as every other
    panel on the page, so a warning printed into one reads as a caption — two
    people missed the "this page is not HTTPS" note entirely and reported the
    feature as broken.
-   Tints are rgba over the existing --warn/--bad, so one rule covers the light
+   Tints are mixed from the existing --warn/--bad, so one rule covers the light
    and dark themes without a second palette. */
 .card.notice {
-  border-color: rgba(245, 158, 11, 0.55);
-  background: rgba(245, 158, 11, 0.1);
-  border-left: 4px solid var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, var(--card));
+  box-shadow: inset 3px 0 0 var(--warn);
 }
 /* Advisory vs blocking. `.notice` alone is "read this"; `.stop` is "the form
    below is switched off because of this", and the two must not look alike —
    the mDNS hint appears on a perfectly working page. */
 .card.notice.stop {
-  border-color: rgba(239, 68, 68, 0.55);
-  background: rgba(239, 68, 68, 0.1);
-  border-left-color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+  background: color-mix(in srgb, var(--bad) 9%, var(--card));
+  box-shadow: inset 3px 0 0 var(--bad);
 }
 .card.notice a {
   color: inherit;
@@ -217,8 +356,8 @@ main {
    full-bleed at the top: this is about the page itself, not about anything in
    it. */
 .stale-banner {
-  border-bottom: 1px solid rgba(245, 158, 11, 0.55);
-  background: rgba(245, 158, 11, 0.1);
+  border-bottom: 0.5px solid color-mix(in srgb, var(--warn) 55%, transparent);
+  background: color-mix(in srgb, var(--warn) 14%, var(--bg));
   color: var(--fg);
   padding: 10px 16px;
   font-size: 14px;
@@ -232,18 +371,21 @@ main {
    form cannot be submitted. The fields themselves are given a real `disabled`
    attribute in the JS, so keyboard and screen-reader users get the same
    answer as the dimming gives everyone else. */
-.card.blocked h3,
-.card.blocked .sub,
-.card.blocked label {
+.blocked h3,
+.blocked .sub,
+.blocked .field > span {
   opacity: 0.6;
 }
 h3 {
   margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
 }
 .sub {
   color: var(--mut);
   font-size: 12px;
   margin: 0 0 12px;
+  max-width: 78ch;
 }
 table {
   width: 100%;
@@ -252,13 +394,14 @@ table {
 th,
 td {
   text-align: left;
-  padding: 7px 8px;
-  border-bottom: 1px solid var(--line);
+  padding: 6px 8px;
+  border-bottom: 0.5px solid var(--line);
   font-size: 13px;
 }
 th {
   color: var(--mut);
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
 }
 .dot {
   display: inline-block;
@@ -269,25 +412,26 @@ th {
 }
 .dot.on {
   background: var(--ok);
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
 }
 .dot.off {
   background: var(--mut);
 }
 code,
 pre {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
 }
 code {
-  background: rgba(127, 127, 127, 0.12);
+  background: color-mix(in srgb, var(--mut) 13%, transparent);
   padding: 1px 5px;
-  border-radius: 5px;
-  font-size: 12px;
+  border-radius: 4px;
+  font-size: 11.5px;
 }
 pre {
-  background: rgba(127, 127, 127, 0.09);
+  background: var(--card2);
+  border: 0.5px solid var(--line);
   padding: 10px;
-  border-radius: 9px;
+  border-radius: 6px;
   overflow: auto;
   max-height: 360px;
   font-size: 12px;
@@ -306,10 +450,10 @@ pre {
   min-width: 280px;
 }
 
-/* toggle */
+/* toggle — NSSwitch: accent when on, a knob with its own shadow. */
 .sw {
   position: relative;
-  width: 40px;
+  width: 38px;
   height: 22px;
   flex: none;
 }
@@ -322,33 +466,42 @@ pre {
 .sw .sl {
   position: absolute;
   inset: 0;
-  background: var(--line);
+  background: color-mix(in srgb, var(--mut) 28%, transparent);
   border-radius: 999px;
-  transition: 0.15s;
-  cursor: pointer;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 8%);
+  transition: background 0.18s;
+  cursor: default;
 }
 .sw .sl:before {
   content: '';
   position: absolute;
-  width: 16px;
-  height: 16px;
-  left: 3px;
-  top: 3px;
+  width: 20px;
+  height: 20px;
+  left: 1px;
+  top: 1px;
   background: #fff;
   border-radius: 50%;
-  transition: 0.15s;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 25%),
+    0 0 0 0.5px rgb(0 0 0 / 6%);
+  transition: transform 0.18s;
 }
 .sw input:checked + .sl {
-  background: var(--ok);
+  background: var(--accent);
 }
 .sw input:checked + .sl:before {
-  transform: translateX(18px);
+  transform: translateX(16px);
+}
+.sw input:focus-visible + .sl {
+  outline: 3px solid var(--ring);
+  outline-offset: 1px;
 }
 .stbl td:first-child {
   color: var(--mut);
 }
 .stbl td:nth-child(2) {
-  font-weight: 600;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .stbl td:nth-child(3) {
@@ -379,34 +532,45 @@ pre {
    more visual weight than the litter level it sits above. Destructive actions
    keep red, as an outline rather than a slab: enough to catch the eye without
    competing with the rest of the page. */
+/* An NSButton push button: the raised white face and half-pixel edge are what
+   make it read as a control on a white group box without needing a colour. */
 .act {
-  background: transparent;
+  background: var(--control);
   color: var(--fg);
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 7px 12px;
-  cursor: pointer;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: var(--shadow-control);
+  padding: 4px 11px;
+  cursor: default;
+  font: inherit;
   font-size: 13px;
-  font-weight: 500;
-  margin: 3px 3px 3px 0;
+  line-height: 16px;
+  margin: 3px 4px 3px 0;
 }
 .act:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--control) 94%, var(--fg));
+}
+.act:active {
+  background: color-mix(in srgb, var(--control) 84%, var(--fg));
+}
+.act.primary {
+  background: linear-gradient(rgb(255 255 255 / 14%), transparent), var(--accent);
+  color: #fff;
+}
+.act.primary:hover {
+  background: var(--accent2);
 }
 .act.danger {
-  color: var(--bad);
-  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+  color: var(--bad-text);
 }
 .act.danger:hover {
-  border-color: var(--bad);
-  color: var(--bad);
-  background: color-mix(in srgb, var(--bad) 8%, transparent);
+  color: var(--bad-text);
+  background: color-mix(in srgb, var(--bad) 8%, var(--control));
 }
-/* The example chips under the raw-command box: same outline, smaller. */
+/* The example chips under the raw-command box: same button, smaller. */
 .act.mini-ex {
   font-size: 12px;
-  padding: 4px 9px;
+  padding: 2px 8px;
 }
 label.showall {
   display: inline-flex;
@@ -425,35 +589,68 @@ label.showall input {
 }
 .ghost {
   background: none;
-  border: 1px solid var(--line);
+  box-shadow: none;
+  border: 0;
   color: var(--fg);
-  font-weight: 500;
 }
 .ghost:hover {
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--hover);
 }
+/* The default button: the one accent-filled control in a group. */
 .mini {
-  background: var(--accent);
+  background: linear-gradient(rgb(255 255 255 / 14%), transparent), var(--accent);
   color: #fff;
   border: 0;
-  border-radius: 7px;
-  padding: 5px 10px;
-  cursor: pointer;
+  border-radius: 6px;
+  box-shadow: 0 0.5px 1px rgb(0 0 0 / 20%);
+  padding: 3px 10px;
+  cursor: default;
+  font: inherit;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   flex-shrink: 0;
+}
+.mini:hover {
+  background: var(--accent2);
 }
 input,
 textarea,
 select {
-  background: var(--bg);
+  background: var(--field);
   color: var(--fg);
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 7px 9px;
+  border: 0.5px solid var(--line);
+  box-shadow: inset 0 0.5px 1px rgb(0 0 0 / 6%);
+  border-radius: 5px;
+  padding: 4px 8px;
   font: inherit;
   width: 100%;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 3px solid var(--ring);
+  outline-offset: 0;
+  border-color: var(--accent);
+}
+/* An NSPopUpButton: a raised face with the stacked chevrons at its end, not a
+   sunken field — a select chooses, it does not take typing. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--control)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='12' viewBox='0 0 8 12' fill='none' stroke='%238e8e93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 4.5L4 1.5l3 3M1 7.5l3 3 3-3'/%3E%3C/svg%3E")
+    no-repeat right 8px center;
+  border: 0;
+  box-shadow: var(--shadow-control);
+  padding-right: 24px;
+  border-radius: 6px;
+}
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'] {
+  accent-color: var(--accent);
+  box-shadow: none;
 }
 /* A control that cannot be used has to LOOK unusable. Without this the
    provisioning form sat there fully lit while every field was disabled, so the
@@ -488,72 +685,10 @@ a:hover {
    default. Replaces a grid of summary cards plus a single shared detail pane:
    with one pane the open state of everything inside it was lost on every
    refresh, and there was no way to compare two devices. */
-.devpanel {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  margin-bottom: 12px;
-  overflow: hidden;
-}
-.devpanel > summary {
-  cursor: pointer;
-  padding: 13px 15px;
-  list-style: none;
-}
-.devpanel > summary::-webkit-details-marker {
-  display: none;
-}
-.devpanel > summary::before {
-  content: '▸';
-  color: var(--mut);
-  font-size: 11px;
-  transition: transform 0.15s;
-  display: inline-block;
-}
-.devpanel[open] > summary::before {
-  transform: rotate(90deg);
-}
-.devpanel > summary:hover {
-  background: var(--card2);
-}
-.dp-name {
-  font-size: 15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 40%;
-}
-/* The at-a-glance line the collapsed header still has to carry. Hidden on a
-   narrow screen, where the badges alone already fill the row. */
-.dp-meta {
-  font-size: 11px;
-  white-space: nowrap;
-}
-@media (max-width: 620px) {
-  .dp-meta {
-    display: none;
-  }
-}
-.devbody {
-  padding: 0 13px 4px;
-  border-top: 1px solid var(--line);
-}
-/* The panel is the card now, so the cards inside it are plain sections. */
-.devbody > .card {
-  background: none;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  padding: 12px 2px;
-  margin: 0;
-}
-.devbody > .card:last-child {
-  border-bottom: 0;
-}
 .chip {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   color: var(--mut);
 }
 /* ==== SCHEDULES ==== */
@@ -572,8 +707,8 @@ a:hover {
   align-items: start;
 }
 .sched {
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 0.5px solid var(--line);
+  border-radius: 8px;
   padding: 10px 12px;
   background: var(--card2);
 }
@@ -605,13 +740,11 @@ a:hover {
 .sched-sub {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
   color: var(--mut);
   margin-bottom: 4px;
 }
 .sched-json {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 12px;
   margin-bottom: 6px;
 }
@@ -716,8 +849,8 @@ a:hover {
 }
 .sched-days label {
   font-size: 11px;
-  font-weight: 600;
-  border: 1px solid var(--line);
+  font-weight: 500;
+  border: 0.5px solid var(--line);
   border-radius: 5px;
   padding: 3px 7px;
   cursor: pointer;
@@ -750,15 +883,6 @@ a:hover {
   outline-offset: 1px;
 }
 /* device panel body */
-.dh {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.dh .chip {
-  font-size: 12px;
-}
 .meta {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -766,29 +890,29 @@ a:hover {
   margin-top: 14px;
 }
 .meta .m-k {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
+  font-size: 11px;
   color: var(--mut);
 }
 .meta .m-v {
   font-size: 13px;
   word-break: break-word;
 }
+/* Settings as System Settings lists them: label left, control right, rows
+   divided by a hairline instead of each boxed on its own. Boxed, a grid of
+   twenty toggles was twenty outlines competing with the values inside them. */
 .ctrls {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  column-gap: 28px;
 }
 .ctrl {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  background: var(--card2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px 11px;
+  min-height: 40px;
+  border-bottom: 0.5px solid var(--line);
+  padding: 6px 0;
 }
 .ctrl > span {
   font-size: 13px;
@@ -831,9 +955,6 @@ a:hover {
   .newpet select {
     width: 100%;
   }
-}
-.petcard {
-  background: var(--card2);
 }
 .pet-head {
   display: flex;
@@ -884,9 +1005,9 @@ a:hover {
 .tile {
   position: relative;
   aspect-ratio: 1/1;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 0.5px solid var(--line);
   background: var(--card);
 }
 .tile img {
@@ -948,7 +1069,7 @@ a:hover {
   gap: 10px;
   flex-wrap: wrap;
   padding: 8px 0;
-  border-top: 1px solid var(--line);
+  border-top: 0.5px solid var(--line);
 }
 .unbound select {
   width: auto;
@@ -1006,7 +1127,7 @@ a:hover {
 .dropzone:hover,
 .dropzone.dragover {
   border-color: var(--accent);
-  background: rgba(10, 162, 230, 0.06);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 .dropzone .dz-big {
   font-size: 34px;
@@ -1088,8 +1209,6 @@ a:hover {
 }
 .crop-preview-label {
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
 }
 #cropPreview {
   width: 112px;
@@ -1151,19 +1270,15 @@ a:hover {
 }
 /* ==== LOG ==== */
 .log {
-  font-family: ui-monospace, monospace;
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: 11.5px;
 }
 /* The scrolling viewport around a log. Both logs use it; the Device-logs one is
    shorter because its card sits under the live one. */
 .log.pane {
-  max-height: 70vh;
   overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-.devlog .log.pane {
-  max-height: 50vh;
+  flex: 1;
+  min-height: 160px;
 }
 /* A card's title row: controls on one line with the heading, tight to the body
    below it. */
@@ -1191,7 +1306,7 @@ a:hover {
   min-width: 140px;
 }
 .log .l {
-  border-bottom: 1px solid var(--line);
+  border-bottom: 0.5px solid var(--line);
 }
 .log .l.exp {
   cursor: pointer;
@@ -1203,7 +1318,7 @@ a:hover {
   padding: 4px 6px;
 }
 .log .l.exp:hover .lh {
-  background: rgba(127, 127, 127, 0.06);
+  background: var(--hover);
 }
 .log .lsum {
   flex: 1;
@@ -1220,8 +1335,6 @@ a:hover {
   visibility: hidden;
   padding: 1px 7px;
   font-size: 11px;
-  background: rgba(127, 127, 127, 0.18);
-  color: var(--fg);
 }
 .log .l:hover .logcopy,
 .log .l.open .logcopy {
@@ -1249,40 +1362,45 @@ a:hover {
 body.hidehb .log .l[data-hb='1'] {
   display: none;
 }
+/* Log kinds, in Apple's system palette: tinted capsules rather than solid
+   ones, so a screen of log lines is not a wall of saturated colour. */
 .k {
+  --k: var(--mut);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
   font-size: 10px;
   font-weight: 600;
   padding: 1px 6px;
-  border-radius: 6px;
-  color: #fff;
+  border-radius: 4px;
+  color: var(--k);
+  background: color-mix(in srgb, var(--k) 16%, transparent);
 }
 .k.http {
-  background: #6366f1;
+  --k: #5856d6;
 }
 .k.mqtt {
-  background: #0ea5e9;
+  --k: #32ade6;
 }
 .k.connect {
-  background: #16a34a;
+  --k: var(--ok);
 }
 .k.cmd {
-  background: #f59e0b;
+  --k: var(--warn);
 }
 .k.event {
-  background: #8b5cf6;
+  --k: var(--purple);
 }
 .k.patcher {
-  background: #e11d48;
+  --k: #ff2d55;
 }
 .k.ping {
-  background: #9ca3af;
+  --k: #8e8e93;
 }
 /* Proxy mode: a routine substitution vs something the cloud actually tried. */
 .k.redact {
-  background: #a855f7;
+  --k: var(--purple);
 }
 .k.blocked {
-  background: #dc2626;
+  --k: var(--bad);
 }
 .empty {
   text-align: center;
@@ -1293,26 +1411,35 @@ body.hidehb .log .l[data-hb='1'] {
   font-size: 34px;
   margin-bottom: 8px;
 }
+/* A HUD: dark translucent glass whatever the theme, like the system volume
+   overlay — it is about the action just taken, not part of the page. */
 .toast {
   position: fixed;
-  bottom: 18px;
+  bottom: 24px;
   left: 50%;
-  transform: translateX(-50%);
-  background: var(--fg);
-  color: var(--bg);
+  transform: translate(-50%, 6px);
+  background: rgb(36 36 38 / 82%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  color: #fff;
   padding: 9px 16px;
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 13px;
   font-weight: 500;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 10px 34px rgb(0 0 0 / 30%),
+    0 0 0 0.5px rgb(255 255 255 / 12%);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
   pointer-events: none;
   z-index: 20;
   max-width: 90vw;
 }
 .toast.show {
   opacity: 1;
+  transform: translate(-50%, 0);
 }
 details.adv summary {
   cursor: pointer;
@@ -1336,7 +1463,7 @@ details.adv summary {
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(127, 127, 127, 0.14);
+  background: color-mix(in srgb, var(--mut) 14%, transparent);
   color: var(--fg);
   margin-right: 7px;
   white-space: nowrap;
@@ -1364,7 +1491,7 @@ details.adv summary {
 /* Wide enough that a visit's summary line — kind, pet, duration, weight,
    waste — fits on one row. At 430px it wrapped mid-phrase. */
 #timelineView {
-  max-width: 600px;
+  max-width: 760px;
   margin: 0 auto;
 }
 .tl-nb {
@@ -1404,26 +1531,25 @@ details.adv summary {
   font-size: 13px;
 }
 .tl-kind {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
   border-radius: 999px;
-  background: rgba(127, 127, 127, 0.14);
+  background: color-mix(in srgb, var(--mut) 14%, transparent);
   color: var(--mut);
   margin-right: 7px;
   vertical-align: 1px;
 }
 .tl-kind.visit {
-  background: rgba(10, 162, 230, 0.16);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent);
 }
 .tl-kind.pet {
-  background: rgba(139, 92, 246, 0.16);
-  color: #8b5cf6;
+  background: color-mix(in srgb, var(--purple) 16%, transparent);
+  color: var(--purple);
 }
 .tl-kind.error {
-  background: rgba(239, 68, 68, 0.16);
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
   color: var(--bad);
 }
 /* thumbnails: preserve aspect ratio — contain, never crop */
@@ -1438,12 +1564,12 @@ details.adv summary {
   position: relative;
   width: 140px;
   max-width: 42vw;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
   background: #000;
   cursor: pointer;
   flex: none;
-  border: 1px solid var(--line);
+  border: 0.5px solid var(--line);
 }
 .tl-thumb.small {
   width: 104px;
@@ -1554,24 +1680,19 @@ details.tl-more .tl-row {
   max-width: 980px;
 }
 /* The filter chips are one control, not five buttons that happen to be
-   adjacent. `.row`'s 14px gap and flex-wrap broke the group across two lines as
-   soon as the counts grew, so they get their own tight, non-wrapping group that
-   scrolls sideways on a narrow screen instead of reflowing. */
-.tl-filterbar {
-  gap: 10px;
-  border-top: 1px solid var(--line);
-  margin-top: 10px;
-  padding-top: 10px;
-}
+   adjacent, so they get their own tight, non-wrapping group that scrolls
+   sideways on a narrow screen instead of reflowing. */
+/* An NSSegmentedControl: a recessed track with the chosen segment raised out
+   of it, rather than one filled pill among outlined ones. */
 .chips {
   display: flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: 2px;
   overflow-x: auto;
-  padding: 3px;
-  background: var(--card2);
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--mut) 13%, transparent);
+  border: 0;
+  border-radius: 7px;
   /* Firefox/WebKit: keep the scrollbar from adding height to the pill. */
   scrollbar-width: none;
 }
@@ -1583,30 +1704,28 @@ details.tl-more .tl-row {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
+  padding: 3px 11px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 5px;
   background: transparent;
-  color: var(--mut);
+  color: var(--fg);
   font: inherit;
   font-size: 12px;
-  cursor: pointer;
+  cursor: default;
   white-space: nowrap;
 }
 .chip-btn:hover {
-  color: var(--fg);
-  background: var(--line);
+  background: var(--hover);
 }
 .chip-btn.on {
-  background: var(--accent);
-  color: #fff;
+  background: var(--control);
+  box-shadow: var(--shadow-control);
+  color: var(--fg);
 }
 .chip-n {
   font-variant-numeric: tabular-nums;
   font-size: 11px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: rgba(127, 127, 127, 0.22);
+  color: var(--mut);
 }
 /* A pet's mugshot inside its chip — the same face the cards below show, so the
    filter and the results are visibly about the same animal. Sized to the cap
@@ -1619,16 +1738,13 @@ details.tl-more .tl-row {
   object-fit: cover;
   margin-left: -6px;
   flex: none;
-  background: rgba(127, 127, 127, 0.22);
+  background: color-mix(in srgb, var(--mut) 22%, transparent);
 }
 .chip-av-none {
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
-}
-.chip-btn.on .chip-n {
-  background: rgba(255, 255, 255, 0.25);
 }
 .tl-dbgtog {
   width: auto;
@@ -1642,11 +1758,11 @@ details.tl-more .tl-row {
 }
 .tl-dbgbtn {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   padding: 2px 6px;
   margin-left: 6px;
-  border: 1px solid var(--line);
+  border: 0.5px solid var(--line);
   border-radius: 999px;
   background: transparent;
   color: var(--mut);
@@ -1662,8 +1778,8 @@ details.tl-more .tl-row {
 }
 .tl-dbgin {
   background: var(--card2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 0.5px solid var(--line);
+  border-radius: 8px;
   padding: 10px 12px;
   margin: 4px 0 8px 82px;
   font-size: 12px;
@@ -1671,8 +1787,7 @@ details.tl-more .tl-row {
 .tl-dbgin h4 {
   margin: 10px 0 4px;
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-weight: 600;
   color: var(--mut);
 }
 .tl-dbgin h4:first-child {
@@ -1689,7 +1804,7 @@ table.tl-dbgt {
 }
 table.tl-dbgt td {
   padding: 3px 6px;
-  border-top: 1px solid var(--line);
+  border-top: 0.5px solid var(--line);
   vertical-align: top;
   overflow-wrap: anywhere;
 }
@@ -1709,63 +1824,98 @@ table.tl-dbgt td:first-child {
 /* An honest badge beats a confident label: `unknown` means we are showing
    the value without claiming to understand it. */
 .tl-grade {
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
   border-radius: 999px;
-  background: rgba(127, 127, 127, 0.14);
+  background: color-mix(in srgb, var(--mut) 14%, transparent);
   color: var(--mut);
   white-space: nowrap;
 }
 .tl-grade.confirmed {
-  background: rgba(22, 163, 74, 0.16);
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
   color: var(--ok);
 }
 .tl-grade.inferred {
-  background: rgba(245, 158, 11, 0.16);
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
   color: var(--warn);
 }
 .tl-grade.conflicted,
 .tl-grade.unverified {
-  background: rgba(239, 68, 68, 0.16);
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
   color: var(--bad);
 }
 /* ==== MODAL ==== */
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgb(0 0 0 / 32%);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 25;
   padding: 20px;
 }
+/* A sheet: the one place with real depth, because it floats over the window. */
 .modal-box {
   background: var(--card);
-  border-radius: 14px;
-  padding: 16px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-window);
+  padding: 18px 20px;
   max-width: 720px;
   width: 100%;
   max-height: 88vh;
   overflow: auto;
 }
-/* Narrow (phone / HA ingress): keep the logo + live pill on the top row and
-   drop the whole nav to its own full-width row below, so it never wraps into
-   an orphaned pill. */
-@media (max-width: 680px) {
-  header nav {
-    order: 3;
-    flex-basis: 100%;
-    margin-top: 8px;
-  }
-}
 /* ==== RESPONSIVE ==== */
-@media (max-width: 560px) {
+/* Narrow (phone, or HA ingress in a small frame): no room for a sidebar, so it
+   folds into a bar across the top and the sections scroll sideways in it,
+   icon and name still together. The group headings go: in one row they would
+   read as sections of their own. */
+@media (max-width: 760px) {
+  .app {
+    display: block;
+  }
+  .sidebar {
+    position: sticky;
+    z-index: 6;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    padding: 0 0 6px;
+    border-right: 0;
+    border-bottom: 0.5px solid var(--line);
+  }
+  .brand {
+    height: 40px;
+    padding: 0 16px;
+  }
+  nav {
+    flex-direction: row;
+    gap: 2px;
+    overflow-x: auto;
+    padding: 0 10px;
+    scrollbar-width: none;
+  }
+  nav::-webkit-scrollbar {
+    display: none;
+  }
+  nav button {
+    width: auto;
+    flex: none;
+    white-space: nowrap;
+  }
+  .nav-group,
+  .nav-sep {
+    display: none;
+  }
+  .toolbar {
+    position: static;
+    height: 44px;
+    padding: 0 16px;
+  }
   main {
-    padding: 12px;
+    padding: 14px 16px 24px;
   }
 }
 
@@ -1773,7 +1923,7 @@ table.tl-dbgt td:first-child {
 .devlog .dl {
   display: flex;
   gap: 10px;
-  font-family: ui-monospace, monospace;
+  font-family: var(--mono);
   font-size: 12px;
   padding: 1px 6px;
   white-space: pre-wrap;
@@ -1792,16 +1942,15 @@ table.tl-dbgt td:first-child {
   border-radius: 3px;
 }
 .k.devlog {
-  background: #0d9488;
+  --k: #00c7be;
 }
 
-/* Provisioning form: labels that own their line, and the button row under them. */
-.field-label {
-  display: block;
-  margin-top: 8px;
-}
+/* The button row under a form, primary action at the trailing edge. */
 .form-actions {
-  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
 }
 #p-log {
   margin-top: 10px;
@@ -1815,17 +1964,19 @@ table.tl-dbgt td:first-child {
 /* Inline help: a `?` beside a label, and the popover it opens. The popover is
    parented to <body> (see `help()` in js/help.js), so it must out-stack every card
    and the sticky nav. */
+/* The round help button AppKit puts in dialogs, at label size. */
 button.help {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   width: 15px;
   height: 15px;
   padding: 0;
   margin-left: 5px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: 999px;
-  background: transparent;
+  background: var(--control);
+  box-shadow: var(--shadow-control);
   color: var(--mut);
   cursor: help;
   vertical-align: 1px;
@@ -1835,18 +1986,23 @@ button.help[aria-expanded='true'] {
   border-color: var(--accent);
   color: var(--accent);
 }
+/* An NSPopover: translucent material, rounded, lifted off the window. */
 #helpPop {
   position: absolute;
   z-index: 200;
   max-width: 320px;
-  padding: 9px 11px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--card);
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card) 86%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
   color: var(--fg);
   font-size: 12px;
   line-height: 1.5;
-  box-shadow: 0 6px 24px rgb(0 0 0 / 18%);
+  box-shadow:
+    0 10px 34px rgb(0 0 0 / 20%),
+    0 0 0 0.5px var(--line);
 }
 
 /* A number typed but not yet sent. Without this it looks identical to the
@@ -1858,14 +2014,15 @@ button.help[aria-expanded='true'] {
 :root .live-dialog {
   width: min(94vw, 760px);
   max-height: 95vh;
-  padding: 18px;
-  border: 1px solid #dce2e7;
-  border-radius: 16px;
-  background: #fff;
-  color: #1c2933;
+  padding: 18px 20px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--fg);
+  box-shadow: var(--shadow-window);
 }
 .live-dialog::backdrop {
-  background: #0009;
+  background: rgb(0 0 0 / 45%);
 }
 .live-heading {
   display: flex;
@@ -1880,7 +2037,10 @@ button.help[aria-expanded='true'] {
   width: 100%;
   aspect-ratio: 1;
   max-height: 72vh;
-  background: #101820;
+  margin-top: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
 }
 .live-screen petkit-live-video,
 .live-screen video {
@@ -1893,4 +2053,826 @@ button.help[aria-expanded='true'] {
 .live-note {
   margin: 10px 0;
   font-size: 13px;
+}
+
+/* The timeline's previous/next-day arrows: borderless toolbar buttons with a
+   chevron at text size, like a native date stepper. */
+[data-action='tl-shift'] {
+  font-size: 18px;
+  line-height: 16px;
+  padding: 3px 9px 5px;
+}
+
+/* ==== DEVICE PAGE ==== */
+/* One device, one window: its sections live behind a segmented control rather
+   than in a page-long stack, and the overview pane is laid out by what the
+   person came for: state, then actions, with supplies and the day beside them. */
+.nav-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.nav-sub:empty::after {
+  content: '尚无设备';
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--mut);
+}
+.nav-gl {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: var(--mut);
+}
+nav button.on .nav-gl {
+  color: #fff;
+}
+.gl {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+nav .lbl {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+nav .dot {
+  width: 7px;
+  height: 7px;
+  box-shadow: none;
+}
+nav button.on .dot.on {
+  background: #fff;
+}
+.toolbar-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+.toolbar-title span {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toolbar-title span:empty {
+  display: none;
+}
+#pageActions .act {
+  margin: 0;
+}
+.devbody > .card {
+  background: var(--card);
+  border: 0.5px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.dev-tabs {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+.dev-tabs:empty {
+  display: none;
+}
+.dev-tabs .chips {
+  max-width: 100%;
+}
+/* Headed groups in the System Settings manner: the title sits on the window,
+   outside the box it names. */
+.sgroup {
+  margin-bottom: 18px;
+  min-width: 0;
+}
+.sgroup > h3,
+.sgroup-head {
+  margin: 0 2px 6px;
+}
+.sgroup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+.sgroup-head h3 {
+  margin: 0;
+}
+.sbox {
+  background: var(--card);
+  border: 0.5px solid var(--line);
+  border-radius: 10px;
+  padding: 2px 14px;
+}
+.sbox > .ctrl:last-child {
+  border-bottom: 0;
+}
+.sbox-note {
+  margin: 10px 0 6px;
+}
+/* Two columns of groups, balanced by height rather than forced into rows: the
+   Cleaning group is five times the size of Deodorizing. */
+.sgroups {
+  columns: 2 340px;
+  column-gap: 20px;
+}
+.sgroups > .sgroup {
+  break-inside: avoid;
+}
+/* The Apply button only exists once there is something to apply. A Set button
+   on every number was a wall of blue for controls nobody had touched. */
+.sbox .cn input:not(.dirty) + .mini {
+  display: none;
+}
+.sbox .cn input[data-input='tz-offset'] + .mini {
+  display: inline-block;
+}
+
+/* ---- overview pane ---- */
+.ov-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+.alerts {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.alert {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 14%, var(--card));
+  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--warn) 45%, transparent);
+}
+/* The page's one large thing: what the machine is doing right now, in a single
+   word, next to its picture. */
+.hero {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 18px;
+  background: var(--card);
+  border: 0.5px solid var(--line);
+  border-radius: 12px;
+}
+.hero-pic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 124px;
+  height: 124px;
+  border-radius: 22px;
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(145deg, #5ac8fa, #007aff);
+}
+.hero-feeder {
+  background: linear-gradient(145deg, #ffcc00, #ff9500);
+}
+.hero-fountain {
+  background: linear-gradient(145deg, #64d2ff, #30b0c7);
+}
+.hero-purifier {
+  background: linear-gradient(145deg, #a2e6a0, #34c759);
+}
+.hero-pic .gl {
+  width: 68px;
+  height: 68px;
+  stroke-width: 1.2;
+}
+.hero-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.hero-text {
+  min-width: 0;
+  flex: 1;
+}
+.hero-state {
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  margin-bottom: 14px;
+}
+.hero-state.bad {
+  color: var(--bad-text);
+}
+.hero-state.off {
+  color: var(--mut);
+}
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+.hero-stats dt {
+  font-size: 11px;
+  color: var(--mut);
+}
+.hero-stats dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* Actions: big targets for the things done daily. */
+.tiles-act {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 10px;
+}
+.tile-act {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--control);
+  box-shadow: var(--shadow-control);
+  color: var(--fg);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: default;
+}
+.tile-act .gl {
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+}
+.tile-act:hover {
+  background: color-mix(in srgb, var(--control) 95%, var(--fg));
+}
+.tile-act:active {
+  background: var(--accent);
+  color: #fff;
+}
+.tile-act:active .gl {
+  color: #fff;
+}
+.run-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+.run-row .cmd-out {
+  font-size: 12px;
+}
+/* Pause, resume and stop are one instrument, so they share one face. */
+.run-ctl {
+  display: inline-flex;
+  border-radius: 6px;
+  background: var(--control);
+  box-shadow: var(--shadow-control);
+}
+.run-ctl button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  cursor: default;
+}
+.run-ctl button + button {
+  box-shadow: inset 0.5px 0 0 var(--line);
+}
+.run-ctl button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.run-ctl button:last-child {
+  border-radius: 0 6px 6px 0;
+}
+.run-ctl button:hover {
+  background: var(--hover);
+}
+.run-ctl .gl {
+  width: 13px;
+  height: 13px;
+}
+/* The More menu: an NSMenu, dropped from its button. */
+.menu {
+  position: relative;
+}
+.menu > summary {
+  list-style: none;
+  display: inline-flex;
+  padding: 3px 8px;
+  margin: 0;
+}
+.menu > summary::-webkit-details-marker {
+  display: none;
+}
+.menu-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 8;
+  min-width: 190px;
+  padding: 5px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow:
+    0 10px 34px rgb(0 0 0 / 22%),
+    0 0 0 0.5px var(--line);
+}
+.menu-item {
+  display: block;
+  width: 100%;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.menu-item.danger {
+  color: var(--bad-text);
+}
+.menu-item:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.menu-sep {
+  height: 0.5px;
+  margin: 5px 10px;
+  background: var(--line);
+}
+/* Supplies */
+.supplies {
+  display: grid;
+  gap: 2px;
+}
+.sbox.supplies {
+  padding: 6px 14px;
+}
+.supply {
+  padding: 6px 0;
+}
+.supply-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.supply-line span {
+  flex: 1;
+  min-width: 0;
+  color: var(--mut);
+}
+.supply-line b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.supply-line .link {
+  padding: 0 0 0 4px;
+}
+.meter {
+  height: 5px;
+  margin-top: 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--mut) 18%, transparent);
+}
+.meter i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+.meter.low i {
+  background: var(--warn);
+}
+/* Today */
+.activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.activity li {
+  display: flex;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 0.5px solid var(--line);
+}
+.activity li:last-child {
+  border-bottom: 0;
+}
+.activity time {
+  flex: none;
+  color: var(--mut);
+  font-variant-numeric: tabular-nums;
+}
+.act-text {
+  flex: 1;
+  min-width: 0;
+}
+.act-dev {
+  flex: none;
+  font-size: 12px;
+}
+.act-empty {
+  margin: 10px 0;
+}
+
+/* ---- the Overview page ---- */
+.overview {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.dev-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.dev-tile {
+  display: flex;
+  flex-direction: column;
+  min-height: 170px;
+  padding: 14px;
+  background: var(--card);
+  border: 0.5px solid var(--line);
+  border-radius: 12px;
+}
+.dev-tile:hover {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.dev-tile-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.dev-tile-top .act {
+  margin: 0;
+}
+.dev-gl {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.dev-gl .gl {
+  width: 22px;
+  height: 22px;
+}
+.dev-tile-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: default;
+}
+.dev-tile-state {
+  margin-bottom: 8px;
+  color: var(--mut);
+}
+.dev-tile-state.bad {
+  color: var(--bad-text);
+}
+.dev-tile .supplies {
+  margin-top: auto;
+}
+.dev-tile .supply {
+  padding: 3px 0;
+}
+.dev-tile .supply-line {
+  font-size: 12px;
+}
+@media (max-width: 1040px) {
+  .ov-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  /* The device rows join the sections in the one sideways-scrolling bar. */
+  .nav-sub {
+    display: contents;
+  }
+  #pageActions .act {
+    white-space: nowrap;
+  }
+  .toolbar-title span {
+    display: none;
+  }
+}
+@media (max-width: 560px) {
+  .hero {
+    gap: 14px;
+    padding: 14px;
+  }
+  .hero-pic {
+    width: 76px;
+    height: 76px;
+    border-radius: 16px;
+  }
+  .hero-pic .gl {
+    width: 42px;
+    height: 42px;
+  }
+  .hero-state {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+  .tiles-act {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dev-tabs {
+    justify-content: flex-start;
+  }
+}
+
+/* ==== PAGES ==== */
+/* A single column of groups, the width System Settings gives its own. A form
+   stretched to the window puts each label a screen away from its control. */
+.page-narrow {
+  max-width: 640px;
+  margin: 0 auto;
+}
+.page-narrow.wide {
+  max-width: 780px;
+}
+/* A setting's explanation, under its name rather than behind a `?`. */
+.ctrl small,
+.kv small {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--mut);
+}
+/* Form rows: label at the leading edge, the field filling the rest. */
+.field {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 6px 0;
+  border-bottom: 0.5px solid var(--line);
+}
+.sbox > .field:last-child {
+  border-bottom: 0;
+}
+.field .cn {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.kv {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 0.5px solid var(--line);
+}
+.kv:last-child {
+  border-bottom: 0;
+}
+.kv small {
+  grid-column: 1 / -1;
+}
+table.ret th:first-child {
+  width: 34%;
+}
+table.ret tr:last-child td {
+  border-bottom: 0;
+}
+table.ret input {
+  width: 110px;
+}
+@media (max-width: 560px) {
+  .field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
+/* The steps of provisioning really are a sequence, so they are numbered. */
+.steps {
+  counter-reset: step;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 0 20px;
+  padding: 0;
+}
+.steps li {
+  counter-increment: step;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.steps li::before {
+  content: counter(step);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+}
+.steps b {
+  font-size: 13px;
+  font-weight: 600;
+}
+@media (max-width: 560px) {
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Patches: a list with one verb per row. */
+.patch {
+  padding: 10px 0;
+  border-bottom: 0.5px solid var(--line);
+}
+.patch:last-child {
+  border-bottom: 0;
+}
+.patch-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.patch-head .act {
+  margin: 0;
+}
+.patch .sub {
+  margin: 4px 0 2px;
+}
+.patch details.adv summary {
+  font-size: 12px;
+}
+.patch-wait {
+  margin: 0 2px 6px;
+}
+.sbox .sub:last-child {
+  margin-bottom: 8px;
+}
+.card.notice {
+  padding: 10px 14px;
+}
+
+/* The Log section is Console.app: a bar of filters over a pane that takes the
+   rest of the window, so a log gets every line the screen can hold. */
+.console {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 148px);
+  min-height: 320px;
+  background: var(--card);
+  border: 0.5px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.console-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 7px 12px;
+  border-bottom: 0.5px solid var(--line);
+  background: var(--card2);
+}
+.console-bar label {
+  white-space: nowrap;
+}
+.console-bar input[type='checkbox'] {
+  width: auto;
+  vertical-align: -1px;
+}
+.console-bar select {
+  width: auto;
+  max-width: 220px;
+}
+.console-bar input:not([type]) {
+  width: 200px;
+}
+.console-bar .act {
+  margin: 0;
+}
+.console-foot {
+  margin: 0;
+  padding: 7px 12px;
+  border-top: 0.5px solid var(--line);
+}
+
+/* Timeline: the bar stays put under the toolbar while the day scrolls, and the
+   day reads down one rail rather than as a stack of separate cards. */
+.tl-bar {
+  position: sticky;
+  top: 52px;
+  z-index: 4;
+  display: grid;
+  gap: 8px;
+  margin: -20px -24px 16px;
+  padding: 12px 24px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid var(--line);
+}
+.tl-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.tl-bar .chips {
+  max-width: 100%;
+}
+.stepper {
+  display: inline-flex;
+  align-items: center;
+}
+.stepper .act {
+  margin: 0;
+}
+.card.tl-card {
+  position: relative;
+  margin: 0 0 0 16px;
+  padding: 10px 14px 12px;
+  border: 0;
+  border-left: 1.5px solid var(--line);
+  border-radius: 0;
+  background: none;
+}
+.card.tl-card::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 17px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--bg);
+}
+@media (max-width: 760px) {
+  .tl-bar {
+    top: 0;
+    margin: -14px -16px 14px;
+    padding: 10px 16px;
+  }
+  .console {
+    height: auto;
+    max-height: 80vh;
+  }
+}
+
+/* Pets: each animal is a card in its own right, on the window. */
+.petcard {
+  background: var(--card);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before {
+    transition: none !important;
+  }
+}
+.acc-link {
+  margin: 0 0 12px;
 }

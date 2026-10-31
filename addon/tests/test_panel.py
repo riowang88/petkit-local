@@ -1675,8 +1675,8 @@ async def test_the_accessory_panel_is_its_own_panel_and_is_trimmed():
     c = await _mk_client(app)
     try:
         js = _panel_js()
-        assert "accpanel" in js and "accSummary" in js and "accBody" in js
-        assert "relayed by" in js
+        assert "accpanel" in js and "accSubtitle" in js and "accBody" in js
+        assert "经 ' + a.parent_name + ' 中继" in js
         # A transport badge that is true of an accessory. `linkBadge`'s two
         # answers are both false: no MQTT session, no heartbeat queue.
         assert "badge ble" in js

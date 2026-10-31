@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **The panel is laid out like a Mac app.** Devices are rows in a sidebar, and
+  each opens its own page with Overview, Settings, Schedules, Camera,
+  Accessories and Diagnostics panes instead of one long collapsible stack. The
+  overview pane leads with the device's state; daily actions are large tiles,
+  pause, resume and stop share one control, and a consumable's reset sits on
+  that consumable's row. Settings are grouped by what they are about. The Log
+  section, provisioning, patches and Settings were rebuilt the same way.
+
 ## 2.1.0 — 2026-08-12
 
 The YumShare Dual-Hopper (D4SH) camera feeder is now confirmed working, and most

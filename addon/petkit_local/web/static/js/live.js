@@ -122,9 +122,10 @@ onAction('close-live', closeLive);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) closeLive();
 });
-document
-  .querySelectorAll('nav button')
-  .forEach(button => button.addEventListener('click', closeLive));
+// Delegated: the sidebar's device rows come and go after this module has run.
+document.addEventListener('click', ev => {
+  if (ev.target.closest?.('nav button')) closeLive();
+});
 globalThis.addEventListener('pagehide', closeLive);
 
 export { openLive, closeLive };

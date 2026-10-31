@@ -5,19 +5,45 @@
 <link rel="stylesheet" href="static/styles.css?v={{ asset_version }}">
 </head>
 <body>
-<header>
-  <h1>🐾 <span class="full">PetKit Local</span></h1>
-  <nav role="tablist" aria-label="面板栏目">
-    <button data-tab="devices" role="tab" aria-selected="true" aria-controls="tab-devices" class="on">设备</button>
-    <button data-tab="timeline" role="tab" aria-selected="false" aria-controls="tab-timeline">时间线</button>
-    <button data-tab="pets" role="tab" aria-selected="false" aria-controls="tab-pets">AI / 宠物</button>
-    <button data-tab="provision" role="tab" aria-selected="false" aria-controls="tab-provision">蓝牙配网</button>
-    <button data-tab="log" role="tab" aria-selected="false" aria-controls="tab-log">日志</button>
-    <button data-tab="capture" role="tab" aria-selected="false" aria-controls="tab-capture">流量记录</button>
-    <button data-tab="patchers" role="tab" aria-selected="false" aria-controls="tab-patchers">设备补丁</button>
-    <button data-tab="setup" role="tab" aria-selected="false" aria-controls="tab-setup">设置</button>
+<!-- A macOS window in two columns: a source-list sidebar and the content beside
+     it, the same split a native NavigationSplitView makes. Devices are first-
+     class rows here (#navDevices, drawn by devices.js), and the groups below
+     them are the real structure of the panel, not decoration. The top of the sidebar is where a native window's traffic
+     lights go; nothing imitates them here, because in a browser they would be
+     controls that do nothing. -->
+<div class="app">
+<aside class="sidebar">
+  <h1 class="brand"><span class="brand-mark" aria-hidden="true">🐾</span>PetKit Local</h1>
+  <nav role="tablist" aria-label="面板栏目" aria-orientation="vertical">
+    <button data-tab="devices" role="tab" aria-selected="true" aria-controls="tab-devices" class="on">
+      <span class="ico" style="--ico:#007aff" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><span class="lbl">概览</span></button>
+    <div class="nav-group" aria-hidden="true">设备</div>
+    <div id="navDevices" class="nav-sub"></div>
+    <div class="nav-group" aria-hidden="true">活动</div>
+    <button data-tab="timeline" role="tab" aria-selected="false" aria-controls="tab-timeline">
+      <span class="ico" style="--ico:#ff9500" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/></svg></span><span class="lbl">时间线</span></button>
+    <button data-tab="pets" role="tab" aria-selected="false" aria-controls="tab-pets">
+      <span class="ico" style="--ico:#ff2d55" aria-hidden="true"><svg viewBox="0 0 24 24" class="fill"><circle cx="6.5" cy="10.5" r="1.8"/><circle cx="10" cy="6.8" r="1.8"/><circle cx="14" cy="6.8" r="1.8"/><circle cx="17.5" cy="10.5" r="1.8"/><path d="M12 11.5c-2.6 0-5.2 3.2-5.2 5.3 0 1.6 1.6 2.1 2.7 1.7 1-.4 1.6-.6 2.5-.6s1.5.2 2.5.6c1.1.4 2.7-.1 2.7-1.7 0-2.1-2.6-5.3-5.2-5.3z"/></svg></span><span class="lbl">AI / 宠物</span></button>
+    <div class="nav-group" aria-hidden="true">维护</div>
+    <button data-tab="provision" role="tab" aria-selected="false" aria-controls="tab-provision">
+      <span class="ico" style="--ico:#5856d6" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 7.5l10 9-5 4.5V3l5 4.5-10 9"/></svg></span><span class="lbl">蓝牙配网</span></button>
+    <button data-tab="patchers" role="tab" aria-selected="false" aria-controls="tab-patchers">
+      <span class="ico" style="--ico:#ff3b30" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14.7 5.3a4 4 0 0 0-5.2 5.2L4.5 15.5l4 4 5-5a4 4 0 0 0 5.2-5.2l-2.4 2.4-2.6-.5-.5-2.6z"/></svg></span><span class="lbl">设备补丁</span></button>
+    <div class="nav-group" aria-hidden="true">诊断</div>
+    <button data-tab="log" role="tab" aria-selected="false" aria-controls="tab-log">
+      <span class="ico" style="--ico:#34c759" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M7.5 10l2.5 2-2.5 2M12.5 15h4"/></svg></span><span class="lbl">日志</span></button>
+    <button data-tab="capture" role="tab" aria-selected="false" aria-controls="tab-capture">
+      <span class="ico" style="--ico:#30b0c7" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.5 19V5M8.5 5L5 8.5M8.5 5L12 8.5M15.5 5v14M15.5 19L12 15.5M15.5 19l3.5-3.5"/></svg></span><span class="lbl">流量记录</span></button>
+    <div class="nav-sep" aria-hidden="true"></div>
+    <button data-tab="setup" role="tab" aria-selected="false" aria-controls="tab-setup">
+      <span class="ico" style="--ico:#8e8e93" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3M6 6l2.1 2.1M15.9 15.9L18 18M6 18l2.1-2.1M15.9 8.1L18 6"/></svg></span><span class="lbl">设置</span></button>
   </nav>
+</aside>
+<div class="content">
+<header class="toolbar">
+  <div class="toolbar-title"><h2 id="pageTitle">概览</h2><span id="pageSub" class="mut"></span></div>
   <span class="grow"></span>
+  <span id="pageActions"></span>
   <span id="wsState" class="pill">…</span>
 </header>
 <main>
@@ -27,9 +53,12 @@
   <section id="tab-timeline" role="tabpanel" class="hidden"><div id="timelineView">…</div></section>
   <section id="tab-pets" role="tabpanel" class="hidden"><div id="petsView">…</div></section>
   <section id="tab-log" role="tabpanel" class="hidden">
-    <div class="card">
-      <div class="row head">
-        <h3>实时通信日志</h3>
+    <div class="dev-tabs"><div class="chips" role="tablist" aria-label="日志来源">
+      <button class="chip-btn on" role="tab" aria-selected="true" data-action="log-pane" data-pane="live">实时通信</button>
+      <button class="chip-btn" role="tab" aria-selected="false" data-action="log-pane" data-pane="device">设备日志</button>
+    </div></div>
+    <div class="console" data-log-pane="live">
+      <div class="console-bar">
         <label class="mut"><input type="checkbox" id="hideHb" checked> 隐藏心跳</label>
         <label class="mut"><input type="checkbox" id="autoscroll" checked> 自动滚动</label>
         <span class="grow"></span>
@@ -39,40 +68,50 @@
       </div>
       <div id="logView" class="log pane"></div>
     </div>
-    <div class="card devlog">
-      <div class="row head">
-        <h3>设备日志</h3>
+    <div class="console devlog hidden" data-log-pane="device">
+      <div class="console-bar">
         <select id="devLogPick" data-change="devlog-pick"></select>
-        <input id="devLogGrep" placeholder="搜索日志…" data-input="devlog-grep" autocomplete="off" spellcheck="false">
+        <input id="devLogGrep" placeholder="搜索日志" data-input="devlog-grep" autocomplete="off" spellcheck="false">
         <span class="grow"></span>
         <span id="devLogCount" class="mut"></span>
         <a id="devLogDl" class="act" style="display:none">下载</a>
       </div>
-      <p class="sub">设备上传到此处的 <code>devRun.log</code>。需在设备上启用<b>收集调试日志</b>，具体上传时间由设备决定。</p>
       <div id="devLogView" class="log pane"></div>
+      <p class="sub console-foot">设备上传到此处的 <code>devRun.log</code>。需在设备的设置中开启<b>收集调试日志</b>，上传时间由设备决定，通常在重启时。</p>
     </div>
   </section>
   <section id="tab-provision" role="tabpanel" class="hidden">
-    <div id="provWarn" class="card notice" style="display:none"></div>
-    <div id="provForm" class="card">
-      <h3>通过蓝牙配置设备</h3>
-      <p class="sub">将 PetKit 设备设为配网状态，填写 Wi-Fi 信息后开始配网。设备将连接 Wi-Fi 并访问此服务。</p>
-      <div class="row">
-        <div class="col"><label class="mut">Wi-Fi 名称<button class="help" type="button" data-action="help" data-help="设备将连接的网络，未必与浏览器当前网络相同。信息通过蓝牙发送到设备。">?</button></label><input id="p-ssid" autocomplete="off"></div>
-        <div class="col"><label class="mut">Wi-Fi 密码<button class="help" type="button" data-action="help" data-help="必须填写密码；此方式不支持开放网络。密码通过蓝牙从此页面发送到设备，不发送给本地服务或 PETKIT。">?</button></label><input id="p-pass" type="password" autocomplete="off"></div>
+    <div class="page-narrow">
+      <div id="provWarn" class="card notice" style="display:none"></div>
+      <div id="provForm">
+        <ol class="steps">
+          <li><b>让设备进入配网状态</b><span class="mut">接通电源，等待设备提示可以配网。</span></li>
+          <li><b>填写设备要连接的网络</b><span class="mut">信息通过蓝牙直接发送到设备，不经过本服务或 PETKIT。</span></li>
+          <li><b>开始配网</b><span class="mut">设备连上 Wi-Fi 后会访问此服务，并出现在侧边栏。</span></li>
+        </ol>
+        <section class="sgroup"><h3>Wi-Fi</h3>
+          <div class="sbox">
+            <label class="field"><span>名称<button class="help" type="button" data-action="help" data-help="设备将连接的网络，未必与浏览器当前网络相同。信息通过蓝牙发送到设备。">?</button></span><input id="p-ssid" autocomplete="off"></label>
+            <label class="field"><span>密码<button class="help" type="button" data-action="help" data-help="必须填写密码；此方式不支持开放网络。密码通过蓝牙从此页面发送到设备，不发送给本地服务或 PETKIT。">?</button></span><input id="p-pass" type="password" autocomplete="off"></label>
+          </div>
+        </section>
+        <section class="sgroup"><h3>本地服务</h3>
+          <div class="sbox">
+            <label class="field"><span>服务器地址<button class="help" type="button" data-action="help" data-help="设备将访问此地址而非 PETKIT 云端。配网时会写入设备；请使用设备能解析的 IP 或名称，多数设备无法解析 .local 名称。">?</button></span><input id="p-server"></label>
+            <label class="field"><span>时区<button class="help" type="button" data-action="help" data-help="设备使用此处提供的固定 UTC 偏移，不会自动调整夏令时；不设置时视频可能显示 UTC。标有“已检测”的选项是浏览器当前偏移。">?</button></span><select id="p-tz"></select></label>
+          </div>
+        </section>
+        <div class="form-actions"><span id="p-status" class="mut"></span><span class="grow"></span><button id="p-btn" class="act primary" data-action="provision">通过蓝牙配网</button></div>
+        <pre id="p-log" style="display:none"></pre>
       </div>
-      <label class="mut field-label">设备服务器地址<button class="help" type="button" data-action="help" data-help="设备将访问此地址而非 PETKIT 云端。配网时会写入设备；请使用设备能解析的 IP 或名称，多数设备无法解析 .local 名称。">?</button></label><input id="p-server">
-      <label class="mut field-label">时区<button class="help" type="button" data-action="help" data-help="设备使用此处提供的固定 UTC 偏移，不会自动调整夏令时；不设置时视频可能显示 UTC。标有“已检测”的选项是浏览器当前偏移。">?</button></label>
-      <select id="p-tz"></select>
-      <div class="form-actions"><button id="p-btn" class="act" data-action="provision">通过蓝牙配网</button>
-        <span id="p-status" class="mut"></span></div>
-      <pre id="p-log" style="display:none"></pre>
     </div>
   </section>
-  <section id="tab-capture" role="tabpanel" class="hidden"><div id="capView" class="card">…</div></section>
-  <section id="tab-patchers" role="tabpanel" class="hidden"><div id="patchView">…</div></section>
-  <section id="tab-setup" role="tabpanel" class="hidden"><div id="setupView">…</div></section>
+  <section id="tab-capture" role="tabpanel" class="hidden"><div class="page-narrow wide"><div id="capView" class="card">…</div></div></section>
+  <section id="tab-patchers" role="tabpanel" class="hidden"><div class="page-narrow wide"><div id="patchView">…</div></div></section>
+  <section id="tab-setup" role="tabpanel" class="hidden"><div class="page-narrow"><div id="setupView">…</div></div></section>
 </main>
+</div>
+</div>
 <div id="toast" class="toast"></div>
 <div id="mediaModal" class="modal hidden" data-action="modal-backdrop">
   <div class="modal-box"><button class="ghost act modal-close" data-action="close-modal">✕</button>

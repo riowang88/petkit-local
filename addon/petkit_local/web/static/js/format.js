@@ -31,7 +31,7 @@ function fmtDuration(sec) {
 // checks whether a sensor is working.
 function fmtEntityValue(e) {
   const v = e.value;
-  const unit = e.unit ? ` <span class="mut">${esc(e.unit)}</span>` : '';
+  const unit = e.unit ? ` <span class="mut">${esc(e.unit === 'days' ? '天' : e.unit)}</span>` : '';
   if (v === null || v === undefined) return '<span class="mut">—</span>';
   if (e.options && e.options.length && e.component !== 'event') {
     const vals = e.option_values && e.option_values.length ? e.option_values : e.options;

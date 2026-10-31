@@ -8,8 +8,9 @@
 //              tables, the document listeners, and the section registry
 //   format     one entity value, rendered the way Home Assistant renders it
 //   help       the `?` chips and their popover
-//   nav        the tab bar; each tab's loader lives in its own module
-//   devices    the device panels, their state, and the refresh scheduler
+//   nav        the sidebar; each section's loader lives in its own module
+//   devices    the device pages, their state, and the refresh scheduler
+//   deviceview what a device page says: status, actions, supplies, groups
 //   entities   entityTable / controlRow — the rows a panel is built from
 //   commands   the write path: a control becomes a POST (cf. ha/commands.py)
 //   schedules  the schedule editors, registered into the devices panel

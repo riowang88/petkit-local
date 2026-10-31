@@ -280,4 +280,17 @@ onInput('devlog-grep', el => {
   _devlogT = setTimeout(readDeviceLog, 200);
 });
 
+// The two logs answer different questions, so they take turns rather than
+// stacking: each gets the whole window, which is what a log needs.
+onAction('log-pane', el => {
+  for (const b of el.parentElement.children) {
+    const on = b === el;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  }
+  document
+    .querySelectorAll('[data-log-pane]')
+    .forEach(p => p.classList.toggle('hidden', p.dataset.logPane !== el.dataset.pane));
+});
+
 export { DEVLOG_REASONS, pushLog, loadDeviceLogs };

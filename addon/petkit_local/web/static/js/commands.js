@@ -66,7 +66,7 @@ async function sendAction(el, id, action, destructive, name) {
     // Found by walking up from the button that was pressed, not by a global id:
     // with a panel per device those ids would collide, and every device's
     // result would land in the first panel's slot.
-    const card = el.closest('.card');
+    const card = el.closest('.devpanel');
     const o = card && card.querySelector('.cmd-out');
     if (o) o.textContent = msg;
     toast(msg);
