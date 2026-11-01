@@ -27,8 +27,8 @@ from petkit_local.patchers.common import (
     DEVICE_HTTPD_PORT, TALK_SINK_NAME, TALK_SINK_SCRIPT, app_init_wrapper_path,
     build_wrapper_remove_cmd, cleanup_staged, detect_patch_storage_dir,
     download_from_device, ensure_space_for, generate_app_init_wrapper, md5hex,
-    patched_file_path, patcher_device_files, send_run_cmd, stage_file,
-    wait_for_heartbeat,
+    patched_file_path, patcher_device_files, run_cmd_capture, send_run_cmd,
+    stage_file, wait_for_heartbeat,
 )
 from petkit_local.patchers.mqtt import PATCHER_INFO as MQTT_PATCHER, patch_ctrl
 from petkit_local.patchers.ssh import (
@@ -184,6 +184,82 @@ async def api_patcher_apply(request: web.Request) -> web.Response:
     _spawn_background(request.app, _run(), name=f"patcher-{patcher_id}-{action}-{did}")
     hub.publish("patcher", did, f"[{patcher_id}] {action} started")
     return web.json_response({"ok": True, "patcher": patcher_id, "action": action})
+
+
+#: The probe's whole command, a constant: nothing from the request reaches the
+#: device's shell. Every part only reads (`cat`, `id`, `uname`, `md5sum` — all
+#: present on the stripped busybox these boxes ship), and the only things it
+#: leaves behind are in tmpfs, so a reboot clears them.
+PROBE_COMMAND = (
+    "id; uname -a; cat /proc/uptime; cat /proc/mtd; cat /proc/mounts; "
+    "md5sum /app/bin/ble /app/bin/ctrl"
+)
+
+#: Long enough for a heartbeat device: one ~10s poll to collect the command,
+#: then the capture's own polling of the /tmp httpd.
+PROBE_TIMEOUT = 90.0
+
+
+async def _run_probe(d: Device, device_ip: str, hub: EventHub, app: Any) -> None:
+    """Run `PROBE_COMMAND` once and narrate its output onto the hub.
+
+    Answers the question every device write depends on — does `run_cmd`
+    execute on THIS model, and can its output be read back — before anything
+    is written. `send_run_cmd` is confirmed on a T5 only; a model where it is
+    silently ignored would otherwise surface as a patcher that "completes" and
+    changes nothing.
+
+    Shares the patcher lock because both use a temporary busybox httpd and
+    `killall httpd` cannot target a port: a probe and a patcher run interleaved
+    would each tear down the other's file server.
+    """
+    did = d.petkit_id
+    bridge = app.get("bridge")
+    lock = _PATCHER_LOCKS.setdefault(did, asyncio.Lock())
+    if lock.locked():
+        hub.publish("patcher", did, "[probe] waiting for the running patcher to finish...")
+    async with lock:
+        hub.publish("patcher", did, "[probe] read-only probe started (no device write)")
+        try:
+            text = await run_cmd_capture(d, device_ip, PROBE_COMMAND,
+                                         bridge=bridge, timeout=PROBE_TIMEOUT)
+        finally:
+            # The capture leaves its /tmp httpd listening; nothing the probe
+            # started should outlive it.
+            await send_run_cmd(d, "killall httpd 2>/dev/null", bridge)
+        if text is None:
+            hub.publish("patcher", did,
+                        f"[probe] FAILED: no answer within {PROBE_TIMEOUT:.0f}s — run_cmd "
+                        "may not execute on this model, or the device cannot be reached")
+            return
+        for line in text.splitlines() or ["(empty output)"]:
+            hub.publish("patcher", did, f"[probe] {line}")
+        hub.publish("patcher", did, "[probe] done (read-only; a reboot clears what it touched)")
+
+
+async def api_device_probe(request: web.Request) -> web.Response:
+    """Start the read-only probe; its output arrives over the hub as `[probe]` lines."""
+    hub = request.app["hub"]
+    d = _device_or_404(request)
+    device_ip = d.state.get("ip", "")
+    if not device_ip:
+        return web.json_response({"error": "device IP not known - wait for a state_report"}, status=400)
+
+    # Imported in the call for the same reason as in `api_patcher_apply`.
+    from petkit_local.web.panel import _spawn_background  # noqa: PLC0415
+
+    async def _run() -> None:
+        try:
+            await _run_probe(d, device_ip, hub, request.app)
+        except asyncio.CancelledError:
+            hub.publish("patcher", d.petkit_id, "[probe] cancelled (shutting down)")
+            raise
+        except Exception as e:
+            log.exception("Probe failed for device %d", d.petkit_id)
+            hub.publish("patcher", d.petkit_id, f"[probe] FAILED: {e}")
+
+    _spawn_background(request.app, _run(), name=f"probe-{d.petkit_id}")
+    return web.json_response({"ok": True})
 
 
 def _get_active_patchers(d: Device) -> set[str]:

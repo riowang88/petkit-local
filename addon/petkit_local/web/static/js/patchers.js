@@ -24,6 +24,17 @@ async function loadPatchers() {
     if (!ip || ip === '?')
       html += '<p class="sub patch-wait">设备 IP 未知，等设备下次上报状态后才能应用补丁。</p>';
     html += '<div class="sbox">';
+    // Read-only, so no confirm(): it writes nothing and a reboot clears it.
+    html += `<div class="patch">
+        <div class="patch-head">
+          <span class="dot off" title="只读"></span>
+          <b>只读探针</b>
+          <span class="grow"></span>
+          <button class="act" ${!ip || ip === '?' ? 'disabled' : ''} data-action="run-probe" data-id="${esc(dev.id)}">运行</button>
+        </div>
+        <p class="sub">下发一条固定的只读命令，读回身份、内核、分区表、挂载和 /app/bin/ble、ctrl 的 md5。不写入、不动进程，重启即清。在任何补丁写入前，先用它确认 run_cmd 能在这台设备上执行。</p>
+        <pre id="plog_${esc(dev.id)}_probe" style="display:none;margin-top:8px;font-size:11px;max-height:200px;overflow:auto"></pre>
+      </div>`;
     for (const [pid, pt] of Object.entries(p.patchers || {})) {
       // Real newlines in the description are rendered by `white-space:pre-line`;
       // only the literal two-character sequence "\n" becomes a <br>. Splitting
@@ -66,6 +77,19 @@ onAction('apply-patch', el =>
 onAction('remove-patch', el =>
   removePatch(Number(el.dataset.id), el.dataset.patcher, el.dataset.name),
 );
+onAction('run-probe', el => runProbe(Number(el.dataset.id)));
+async function runProbe(id) {
+  const lg = document.getElementById('plog_' + id + '_probe');
+  if (lg) {
+    lg.style.display = 'block';
+    lg.textContent = '正在运行只读探针…\n';
+  }
+  const r = await api('devices/' + id + '/probe', { method: 'POST' });
+  if (!r.ok) {
+    toast('错误：' + (r.error || '失败'));
+    if (lg) lg.textContent += '错误：' + (r.error || '失败') + '\n';
+  }
+}
 async function applyPatch(id, patcher, name) {
   if (!confirm('确定向此设备应用“' + name + '”吗？\n\n此操作会修改设备固件，请确认已理解其影响。'))
     return;

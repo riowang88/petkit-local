@@ -63,7 +63,7 @@ from petkit_local.web.api.logs import (
 )
 from petkit_local.web.api.live import api_live_mp4, api_live_ws
 from petkit_local.web.api.media import api_media_file, api_media_thumb
-from petkit_local.web.api.patchers import api_patcher_apply, api_patcher_status
+from petkit_local.web.api.patchers import api_device_probe, api_patcher_apply, api_patcher_status
 from petkit_local.web.api.pets import (
     api_pet_detail, api_pet_face_detail, api_pet_face_photo, api_pet_faces,
     api_pets_import, api_pets_list_create, api_pets_unbound,
@@ -239,6 +239,7 @@ def create_panel_app(registry: DeviceRegistry, ble_registry: BLERegistry | None,
     # --- patchers (on-device binary patches) ---
     app.router.add_get("/api/devices/{id}/patcher", api_patcher_status)
     app.router.add_post("/api/devices/{id}/patcher", api_patcher_apply)
+    app.router.add_post("/api/devices/{id}/probe", api_device_probe)
 
     # --- settings ---
     app.router.add_get("/api/settings", api_settings)
