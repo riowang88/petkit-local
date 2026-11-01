@@ -495,6 +495,11 @@ BIND_MOUNT_TEMPLATES = {
         "# MQTT TLS bypass: patched ctrl accepts any broker certificate\n"
         "mount --bind {store}/ctrl_patched /app/bin/ctrl\n"
     ),
+    "no_nfc": (
+        "# No-NFC bag: a missing tag is not treated as a missing bag\n"
+        "mount --bind {store}/ble_patched /app/bin/ble\n"
+        "mount --bind {store}/ctrl_nonfc /app/bin/ctrl\n"
+    ),
     "cloud": (
         "# Local storage: patched cloud accepts LAN IPs + skips TLS verify\n"
         "mount --bind {store}/cloud_patched /app/bin/cloud\n"
@@ -585,7 +590,7 @@ def generate_app_init_wrapper(active_patchers: set[str],
     for pid in ("ssh", "talk"):
         if pid in active_patchers and pid in PRE_INIT_BLOCKS:
             lines.append(PRE_INIT_BLOCKS[pid].format(store=store))
-    for pid in ("mqtt", "cloud", "cacert", "camera"):
+    for pid in ("mqtt", "no_nfc", "cloud", "cacert", "camera"):
         if pid in active_patchers and pid in BIND_MOUNT_TEMPLATES:
             lines.append(BIND_MOUNT_TEMPLATES[pid].format(store=store))
     lines.append(WRAPPER_FOOTER)

@@ -31,6 +31,10 @@ from petkit_local.patchers.common import (
     stage_file, wait_for_heartbeat,
 )
 from petkit_local.patchers.mqtt import PATCHER_INFO as MQTT_PATCHER, patch_ctrl
+from petkit_local.patchers.no_nfc import (
+    BLE_PATCHED_NAME, CTRL_PATCHED_NAME, PATCHER_INFO as NO_NFC_PATCHER,
+    patch_ble, patch_ctrl_nfc,
+)
 from petkit_local.patchers.ssh import (
     AUTHKEYS_STAGED_NAME,
     PATCHER_INFO as SSH_PATCHER, build_install_commands as ssh_install_commands,
@@ -55,7 +59,10 @@ log = logging.getLogger(__name__)
 _PATCHER_LOCKS: dict[int, asyncio.Lock] = {}
 
 ALL_PATCHERS: dict[str, dict[str, Any]] = {
-    p["id"]: p for p in [MQTT_PATCHER, CLOUD_PATCHER, CACERT_PATCHER, CAMERA_PATCHER, SSH_PATCHER, TALK_PATCHER]
+    p["id"]: p for p in [
+        MQTT_PATCHER, CLOUD_PATCHER, CACERT_PATCHER, CAMERA_PATCHER,
+        SSH_PATCHER, TALK_PATCHER, NO_NFC_PATCHER,
+    ]
 }
 
 
@@ -293,13 +300,24 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
     """
     did = d.petkit_id
     reg = app["registry"]
+    P = f"[{patcher_id}]"
+    # Both replace /app/bin/ctrl. Applying one on top of the other would leave
+    # whichever mount runs last, and hide the other patch.
+    already = _get_active_patchers(d)
+    if patcher_id == "no_nfc" and "mqtt" in already:
+        hub.publish("patcher", did,
+                    f"{P} FAILED: remove the MQTT patch first — both replace ctrl")
+        return
+    if patcher_id == "mqtt" and "no_nfc" in already:
+        hub.publish("patcher", did,
+                    f"{P} FAILED: remove the no-NFC patch first — both replace ctrl")
+        return
     # Which transport each run_cmd takes is decided per command by
     # `send_run_cmd`: a device that has joined MQTT stops polling the heartbeat
     # entirely, and the queue it used to be given would never be drained.
     bridge = app.get("bridge")
     cfg = app.get("cfg", {})
     data_dir = cfg.get("data_dir", "/data") if "data_dir" in cfg else "/data"
-    P = f"[{patcher_id}]"
     storage_dir = await detect_patch_storage_dir(d, device_ip, bridge=bridge)
     reg.save()
     wrapper_path = app_init_wrapper_path(d)
@@ -442,6 +460,51 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
         else:
             await asyncio.sleep(15)
             cleanup_staged(TALK_SINK_NAME, did)
+
+    elif patcher_id == "no_nfc":
+        hub.publish("patcher", did, f"{P} starting temp httpd on device...")
+        await send_run_cmd(d, f"busybox httpd -p {DEVICE_HTTPD_PORT} -h /app/bin &", bridge)
+        await asyncio.sleep(12)
+        try:
+            hub.publish("patcher", did, f"{P} downloading ble and ctrl from device...")
+            ble_bin = await download_from_device(device_ip, "ble")
+            ctrl_bin = await download_from_device(device_ip, "ctrl")
+            assert_download_plausible(ble_bin, "ble")
+            assert_download_plausible(ctrl_bin, "ctrl")
+            hub.publish("patcher", did,
+                        f"{P} downloaded ble ({len(ble_bin)} bytes) and ctrl ({len(ctrl_bin)} bytes)")
+            ble_patched = patch_ble(ble_bin)
+            ctrl_patched = patch_ctrl_nfc(ctrl_bin)
+            hub.publish("patcher", did,
+                        f"{P} patched ble md5={md5hex(ble_patched)[:12]} "
+                        f"ctrl md5={md5hex(ctrl_patched)[:12]}")
+        finally:
+            await send_run_cmd(d, "killall httpd 2>/dev/null", bridge)
+
+        ble_path = patched_file_path(BLE_PATCHED_NAME, d)
+        ctrl_path = patched_file_path(CTRL_PATCHED_NAME, d)
+        hub.publish("patcher", did, f"{P} checking free space on device...")
+        hub.publish("patcher", did, f"{P} " + await ensure_space_for(
+            d, device_ip, write_bytes=len(ble_patched) + len(ctrl_patched),
+            targets=[ble_path, ctrl_path, wrapper_path], bridge=bridge,
+            mount=storage_dir))
+
+        stage_file(BLE_PATCHED_NAME, ble_patched, did)
+        stage_file(CTRL_PATCHED_NAME, ctrl_patched, did)
+        hub.publish("patcher", did, f"{P} uploading patched ble and ctrl...")
+        await send_run_cmd(
+            d,
+            f"wget -q -O {ble_path} {download_base}/{BLE_PATCHED_NAME} && chmod +x {ble_path} && "
+            f"wget -q -O {ctrl_path} {download_base}/{CTRL_PATCHED_NAME} && chmod +x {ctrl_path}",
+            bridge,
+        )
+        if not await wait_for_heartbeat(d, timeout=60):
+            hub.publish("patcher", did, f"{P} upload timed out - staged files kept for retry")
+            return
+        await asyncio.sleep(15)
+        cleanup_staged(BLE_PATCHED_NAME, did)
+        cleanup_staged(CTRL_PATCHED_NAME, did)
+        hub.publish("patcher", did, f"{P} files uploaded to {ble_path} and {ctrl_path}")
 
     else:
         # camera writes no file of its own — but the wrapper below is still a
