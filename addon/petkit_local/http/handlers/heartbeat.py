@@ -237,6 +237,10 @@ async def handle_heartbeat(request: web.Request) -> web.Response:
     if device:
         device.last_heartbeat = time.time()
         device.online = True
+        # The install path learns the address from this, the same way a state
+        # report does. A device can keep polling here while that report is quiet.
+        if not device.state.get("ip") and request.remote:
+            device.state["ip"] = request.remote
         note_iot_status(device, request)
 
         cmds = device.pop_commands()

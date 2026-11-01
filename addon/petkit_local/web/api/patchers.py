@@ -475,6 +475,8 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
                         f"{P} downloaded ble ({len(ble_bin)} bytes) and ctrl ({len(ctrl_bin)} bytes)")
             ble_patched = patch_ble(ble_bin)
             ctrl_patched = patch_ctrl_nfc(ctrl_bin)
+            if ble_patched == ble_bin and ctrl_patched == ctrl_bin:
+                raise ValueError("ble and ctrl are already the no-NFC build")
             hub.publish("patcher", did,
                         f"{P} patched ble md5={md5hex(ble_patched)[:12]} "
                         f"ctrl md5={md5hex(ctrl_patched)[:12]}")
@@ -484,18 +486,26 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
         ble_path = patched_file_path(BLE_PATCHED_NAME, d)
         ctrl_path = patched_file_path(CTRL_PATCHED_NAME, d)
         hub.publish("patcher", did, f"{P} checking free space on device...")
+        # The old copies stay on disk until reboot: they are the programs
+        # currently running, so the upload writes a second copy and then
+        # renames it. Their space is not free yet.
         hub.publish("patcher", did, f"{P} " + await ensure_space_for(
             d, device_ip, write_bytes=len(ble_patched) + len(ctrl_patched),
-            targets=[ble_path, ctrl_path, wrapper_path], bridge=bridge,
+            targets=[wrapper_path], bridge=bridge,
             mount=storage_dir))
 
         stage_file(BLE_PATCHED_NAME, ble_patched, did)
         stage_file(CTRL_PATCHED_NAME, ctrl_patched, did)
         hub.publish("patcher", did, f"{P} uploading patched ble and ctrl...")
+        # Opening the running program for writing fails, so each file lands
+        # beside it and replaces the name. The running process keeps the old
+        # copy until the reboot below.
         await send_run_cmd(
             d,
-            f"wget -q -O {ble_path} {download_base}/{BLE_PATCHED_NAME} && chmod +x {ble_path} && "
-            f"wget -q -O {ctrl_path} {download_base}/{CTRL_PATCHED_NAME} && chmod +x {ctrl_path}",
+            f"wget -q -O {ble_path}.new {download_base}/{BLE_PATCHED_NAME} && "
+            f"chmod +x {ble_path}.new && mv -f {ble_path}.new {ble_path} && "
+            f"wget -q -O {ctrl_path}.new {download_base}/{CTRL_PATCHED_NAME} && "
+            f"chmod +x {ctrl_path}.new && mv -f {ctrl_path}.new {ctrl_path}",
             bridge,
         )
         if not await wait_for_heartbeat(d, timeout=60):
@@ -504,6 +514,13 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
         await asyncio.sleep(15)
         cleanup_staged(BLE_PATCHED_NAME, did)
         cleanup_staged(CTRL_PATCHED_NAME, did)
+        written = await run_cmd_capture(
+            d, device_ip, f"md5sum {ble_path} {ctrl_path}", bridge=bridge)
+        ble_md5 = md5hex(ble_patched)
+        ctrl_md5 = md5hex(ctrl_patched)
+        if not written or ble_md5 not in written or ctrl_md5 not in written:
+            raise RuntimeError(
+                "uploaded ble/ctrl do not match the patched bytes; not rebooting")
         hub.publish("patcher", did, f"{P} files uploaded to {ble_path} and {ctrl_path}")
 
     else:

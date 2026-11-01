@@ -4,9 +4,14 @@
 
 - **A no-NFC bag patcher for the T6 on firmware 1.951.** It changes only the
   two Linux programs that treat a missing NFC tag as a missing bag, and uses
-  factory bag profile 1 in that case. Infrared, fault, motion and heating
-  checks are untouched, and any other build is refused. It cannot be combined
-  with the MQTT certificate patch, because both replace `ctrl`.
+  factory bag profile 1 in that case. The screen check that records error 28
+  ("bag box removed") from a missing tag alone is skipped. The small panel
+  and its repeated spoken prompt no longer treat a missing tag alone as the
+  box having been taken out, and the reported install time is 1 when no tag
+  has been read. Infrared, the other box checks, motion and heating are
+  untouched, and any other build is refused.
+  It cannot be combined with the MQTT certificate patch, because both replace
+  `ctrl`.
 - **The panel is laid out like a Mac app.** Devices are rows in a sidebar, and
   each opens its own page with Overview, Settings, Schedules, Camera,
   Accessories and Diagnostics panes instead of one long collapsible stack. The
