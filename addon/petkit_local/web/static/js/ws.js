@@ -59,7 +59,10 @@ function connectWS() {
           lg.style.display = 'block';
           lg.textContent += e.summary + '\n';
           lg.scrollTop = lg.scrollHeight;
-          if (/done|FAILED/.test(e.summary)) setTimeout(loadPatchers, 2000);
+          // A patcher's end changes its applied state, so the view reloads. The
+          // probe changes nothing, and a reload would wipe the output it exists
+          // to show.
+          if (m[1] !== 'probe' && /done|FAILED/.test(e.summary)) setTimeout(loadPatchers, 2000);
         }
       }
     }
