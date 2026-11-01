@@ -9,6 +9,15 @@
   pause, resume and stop share one control, and a consumable's reset sits on
   that consumable's row. Settings are grouped by what they are about. The Log
   section, provisioning, patches and Settings were rebuilt the same way.
+- **The T6's own controls are on its overview.** Pack waste and the sealed door
+  are tiles, the camera head has a control of its own, the bag counter resets
+  from its supplies row, and the privacy switches have their own group.
+- **Provisioning remembers the Wi-Fi name** in the browser. Never the password.
+- **The T6's screen language can be set from the panel.** We seed `en_US`, so a
+  Chinese box turned English on reaching us and nothing offered a way back. It
+  takes effect by the next reboot at the latest.
+- **"Bags Left" is now "Bag Pack Count".** It counts up from a reset, and the
+  old name made a freshly reset bag look empty.
 
 ## 2.1.0 — 2026-08-12
 

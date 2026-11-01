@@ -39,6 +39,7 @@ from petkit_local.ha.entities.numbers import (
 )
 from petkit_local.ha.entities.selects import (
     FEEDER_SELECTS, FOUNTAIN_SELECTS, FOUNTAIN_W7H_SELECTS, LITTER_SELECTS,
+    LITTER_T6_SELECTS,
 )
 from petkit_local.ha.entities.sensors import (
     FEEDER_BINARY_SENSORS, FEEDER_DUAL_HOPPER_SENSORS, FEEDER_NEXT_GEN_HALL_SENSORS,
@@ -191,7 +192,7 @@ CATEGORY_SPECS: dict[str, CategorySpec] = {
             # mode settings and the camera position go last, after them, so
             # nothing already published moves.
             ("t6", (*LITTER_T6_BUTTONS, *LITTER_PACKAGING_SENSORS,
-                    *LITTER_T6_SWITCHES, *LITTER_T6_SENSORS)),
+                    *LITTER_T6_SWITCHES, *LITTER_T6_SENSORS, *LITTER_T6_SELECTS)),
         ),
         # The Purobot Ultra has no N50 cartridge, so the button that claims to
         # reset one cannot be right on this model — and it is not merely inert.

@@ -277,7 +277,7 @@ const CONSUMABLES = [
   ['n60_spray_days', 'N60 除臭液'],
   ['desiccant_days', '干燥剂'],
   ['hopper_level', '粮仓'],
-  ['package_count', '剩余垃圾袋'],
+  ['package_count', '垃圾袋打包次数'],
   ['battery', '电量'],
 ];
 const LOW_PERCENT = 20;
@@ -415,7 +415,10 @@ const SETTING_GROUPS = [
     'light_assist toilet_light camera_light indicator_light display clean_water_lack_light clean_water_empty_light waste_water_full_light wifi_light_assist',
   ],
   ['声音', 'voice_prompt voice_language voice_disturb_mode volume selected_sound'],
-  ['通用', 'child_lock click_ok disturb_mode refill_disturb_mode water_level_disturb_mode'],
+  [
+    '通用',
+    'device_language child_lock click_ok disturb_mode refill_disturb_mode water_level_disturb_mode',
+  ],
 ].map(([name, keys]) => [name, keys.split(' ')]);
 
 function settingsGroups(d, controls) {

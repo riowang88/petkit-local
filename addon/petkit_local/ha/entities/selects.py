@@ -35,6 +35,20 @@ LITTER_SELECTS = [
                              6300, 7200]),
 ]
 
+#: The language of the T6's own screen. Nothing on this side knows a T6's real
+#: value: its state report omits the field, so `default_settings` seeds `en_US`
+#: and `to_device_info` serves that back. Without this control a box that was
+#: Chinese before it reached us stays English. The two codes are the W7H's, and
+#: no T6 capture has confirmed them. Whether a T6 takes this as a live
+#: `property.set` is also unread; the stored value reaches it through
+#: `dev_device_info` at the next boot either way.
+LITTER_T6_SELECTS = [
+    EntityDef(component="select", key="device_language", name="Device Language",
+              value_path="settings.language", icon="mdi:translate",
+              options=["English", "Chinese"],
+              option_values=["en_US", "zh_CN"]),
+]
+
 FEEDER_SELECTS = [
     # `surplusControl` is in real D4SH firmware (`ctrl`, `libbase.so`), so the
     # control is genuine — but it is NOT seeded in `defaults.default_settings()`,

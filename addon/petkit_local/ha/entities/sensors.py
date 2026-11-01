@@ -190,7 +190,7 @@ LITTER_PACKAGING_SENSORS = [
     EntityDef(component="sensor", key="box_store_state", name="Bin Store State",
               value_path="state.boxStoreState", icon="mdi:archive",
               entity_category="diagnostic"),
-    EntityDef(component="sensor", key="package_count", name="Bags Left",
+    EntityDef(component="sensor", key="package_count", name="Bag Pack Count",
               value_path="state.packageCount", icon="mdi:counter"),
 ]
 

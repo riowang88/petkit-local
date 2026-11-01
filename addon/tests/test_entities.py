@@ -64,7 +64,8 @@ EXPECTED_ENTITY_COUNTS = {
     # t6 +5 on 2026-10-30: the four privacy-mode switches its firmware reads in
     # `parse_recv_property_set_normal` (homeMode, cameraInward, cameraOff,
     # noSound) and the raw `cameraPosition` sensor. T6 only.
-    "t3": 46, "t4": 46, "t5": 82, "t6": 98, "t7": 82,
+    # t6 +1 on 2026-11-01: its screen language, which only we can set now.
+    "t3": 46, "t4": 46, "t5": 82, "t6": 99, "t7": 82,
     "feeder": 25, "feedermini": 25, "d3": 25, "d4": 25, "d4s": 25,
     # 2026-08-12: replaced `enable_feed_video` button with individual switches
     # (feed_picture, eat_video, voice_prompt, voice_disturb_mode, disturb_mode)

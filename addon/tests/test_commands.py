@@ -460,6 +460,15 @@ def test_the_t6_buttons_send_the_action_the_app_sent(key, code):
     assert env["params"] == {"start_action": code}
 
 
+def test_the_t6_screen_language_writes_the_locale_code():
+    """The label is ours; the device stores the code, as a string."""
+    d, idx = _t6()
+    suffix, env = handle_ha_command(d, idx["device_language"], "Chinese")
+    assert suffix == "property/set"
+    assert env["params"] == {"language": "zh_CN"}
+    assert d.config["settings"]["language"] == "zh_CN"
+
+
 def test_the_t6_bag_reset_uses_its_native_service():
     """Both 929 and 951 responded to this service with the bag count reset."""
     d, idx = _t6()
