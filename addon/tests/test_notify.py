@@ -263,6 +263,36 @@ async def test_offline_is_announced_on_the_transition_only():
     await asyncio.gather(task, return_exceptions=True)
 
 
+async def test_a_device_that_never_returns_after_a_restart_is_announced():
+    """Contact times are not persisted, so a box that died across a restart
+    reads as never seen; it must still be reported once `timeout` passes."""
+    device = FakeDevice()
+    n = Notifier(_live(), FakeRegistry([device]))
+    task = asyncio.create_task(n.watch_offline(0.05, interval=0.01))
+    try:
+        title = (await asyncio.wait_for(n._queue.get(), 1))[2]
+        assert title == "T6 ABCD 设备离线"
+        device.last_heartbeat = time.time()
+        title = (await asyncio.wait_for(n._queue.get(), 1))[2]
+        assert title == "T6 ABCD 设备恢复在线"
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+async def test_a_device_seen_soon_after_a_restart_is_not_announced():
+    device = FakeDevice()
+    n = Notifier(_live(), FakeRegistry([device]))
+    task = asyncio.create_task(n.watch_offline(0.2, interval=0.01))
+    await asyncio.sleep(0.03)
+    for _ in range(30):  # well past the timeout, polling like a live device
+        device.last_heartbeat = time.time()
+        await asyncio.sleep(0.01)
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    assert _queued(n) == 0
+
+
 async def test_a_device_quiet_at_startup_is_not_news():
     device = FakeDevice()
     device.last_heartbeat = time.time() - 1000
