@@ -90,6 +90,12 @@ def _device_label(device: Device) -> str:
     return f"{device.device_type.upper()} {tail}".strip()
 
 
+def _never_seen(device: Device) -> bool:
+    """Whether this process has had no contact at all from `device`."""
+    return max(device.last_heartbeat, device.last_state_report,
+               device.last_seen, device.last_mqtt) <= 0
+
+
 def _clock(ts: Any) -> str:
     """A wall-clock time, in this process's timezone."""
     moment = datetime.fromtimestamp(ts) if isinstance(ts, (int, float)) else datetime.now()
@@ -223,16 +229,27 @@ class Notifier:
         Devices already quiet at startup are the baseline, not news: every
         restart would otherwise report them. Tracked whether or not the topic is
         on, so switching it on does not announce an old outage.
+
+        Contact times are not persisted, so after a restart every device reads
+        as never seen, which `device_is_stale` does not count as stale. One
+        that stays unseen for `timeout` after we started is counted as quiet
+        here, or a device that died across a restart would never be reported.
         """
         if interval is None:
             interval = max(15.0, min(30.0, timeout / 2))
-        now = time.time()
-        stale = {d.petkit_id for d in self._registry.all() if device_is_stale(d, now, timeout)}
+        started = time.time()
+
+        def quiet(device: Device, now: float) -> bool:
+            if _never_seen(device):
+                return now - started > timeout
+            return device_is_stale(device, now, timeout)
+
+        stale = {d.petkit_id for d in self._registry.all() if quiet(d, started)}
         while True:
             await asyncio.sleep(interval)
             now = time.time()
             for device in self._registry.all():
-                is_stale = device_is_stale(device, now, timeout)
+                is_stale = quiet(device, now)
                 if is_stale == (device.petkit_id in stale):
                     continue
                 (stale.add if is_stale else stale.discard)(device.petkit_id)
