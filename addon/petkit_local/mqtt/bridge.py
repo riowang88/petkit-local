@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from petkit_local.events.store import EventStore
     from petkit_local.ha.publisher import HAPublisher
     from petkit_local.mqtt.upstream import UpstreamMQTT
+    from petkit_local.notify.notifier import Notifier
     from petkit_local.web.hub import EventHub
 
 log = logging.getLogger(__name__)
@@ -145,7 +146,8 @@ class MQTTBridge:
                  event_store: EventStore | None = None,
                  pet_registry: PetRegistry | None = None,
                  live_config: dict[str, Any] | None = None,
-                 upstream: UpstreamMQTT | None = None) -> None:
+                 upstream: UpstreamMQTT | None = None,
+                 notifier: Notifier | None = None) -> None:
         """Wire the bridge's collaborators; nothing connects until `start()`.
 
         Args:
@@ -169,6 +171,7 @@ class MQTTBridge:
                 the panel's toggle reached HTTP immediately but MQTT never.
             upstream: The proxy-mode bridge to the real Aliyun broker
                 (`mqtt/upstream.py`). None disables that half entirely.
+            notifier: Told of each stored event. None sends nothing.
         """
         self._registry = registry
         self._ha_publisher = ha_publisher
@@ -183,6 +186,7 @@ class MQTTBridge:
         self._event_store = event_store
         self._pet_registry = pet_registry
         self._upstream = upstream
+        self._notifier = notifier
         self._client = None
         self._ble_relay = BLERelay(self, registry, ble_registry, ha_publisher)
 
@@ -502,6 +506,8 @@ class MQTTBridge:
             if self._pet_registry is not None:
                 row["pet_id"] = await self._pet_registry.resolve_pet_ref(row.get("pet_ref"))
             await self._event_store.upsert_event(row)
+            if self._notifier is not None:
+                self._notifier.on_event(device, row)
             if self._hub is not None:
                 self._hub.publish("event", device.petkit_id, f"{event_type} ({row['event_kind']})")
             if row.get("pet_id") is not None and self._pet_registry is not None and self._ha_publisher:

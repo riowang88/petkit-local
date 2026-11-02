@@ -7,7 +7,7 @@ which is exactly the kind of thing that drifts silently — a misspelt read is a
 `KeyError` at request time and a misspelt `.get` is a `None` that reads as "not
 wired".
 
-Two of the thirteen keys are set from OUTSIDE the constructor, appear in no
+Three of the fourteen keys are set from OUTSIDE the constructor, appear in no
 signature, and are the reason this file lists all of them rather than only what
 `create_panel_app` writes.
 
@@ -39,9 +39,11 @@ key                  what it holds                               set by
 `go2rtc`             the camera sidecar, for a device's RTSP     main/lifecycle.py
                      URL. Injected so a test that builds a
                      panel need not know about it
+`notifier`           `Notifier`, for the Setup tab's test        main/lifecycle.py
+                     button. Injected for the same reason
 ===================  ==========================================  ===============
 
-Both injected keys are set BEFORE `runner.setup()`, which freezes the
+All injected keys are set BEFORE `runner.setup()`, which freezes the
 Application: a key added after that is a DeprecationWarning today and an error
 under aiohttp 4.
 

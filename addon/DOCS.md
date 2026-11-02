@@ -51,6 +51,21 @@ Payload capture and proxy mode are **not** options here. Both are things you tur
 while watching a device, so they live in the panel's **Setup → Settings**, take
 effect immediately, and persist to `/data/settings_overrides.json`.
 
+## Notifications
+
+Configured in the panel's **Setup → Settings → 通知**, not here. Addresses are
+credentials: once saved they are never shown again, and only the service's own
+HTTPS host is accepted.
+
+- **Spug**: `https://push.spug.cc/xsend/<user id>`, optionally with a channel such
+  as `wx_mp` (WeChat official account). A `/send/<template id>` address also works,
+  and its template must use `${key1}` for the title and `${key2}` for the body.
+- **WeCom group robot**: the robot's full webhook URL. Messages arrive in the
+  WeCom app, not in personal WeChat.
+
+The add-on needs outbound internet access to reach either service. A failed send
+is logged and not retried.
+
 ## Ports
 
 | Container port | Default host port | Purpose |

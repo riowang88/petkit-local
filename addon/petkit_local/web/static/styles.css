@@ -2195,7 +2195,8 @@ nav button.on .dot.on {
 .sbox .cn input:not(.dirty) + .mini {
   display: none;
 }
-.sbox .cn input[data-input='tz-offset'] + .mini {
+.sbox .cn input[data-input='tz-offset'] + .mini,
+.sbox .cn input[data-always-set] + .mini {
   display: inline-block;
 }
 

@@ -46,6 +46,14 @@ PANEL_LIVE_KEYS = (
     "proxy_mqtt_bridge",
     "proxy_only",
     "capture",
+    "notify_spug_url",
+    "notify_spug_channel",
+    "notify_wecom_url",
+    "notify_error",
+    "notify_offline",
+    "notify_toilet",
+    "notify_feeding",
+    "notify_cleaning",
 )
 OVERRIDES_FILENAME = "settings_overrides.json"
 
@@ -324,6 +332,17 @@ class Config:
     #: real credentials have been learned from a proxied dev_iot_device_info.
     proxy_mqtt_bridge: bool = True
 
+    # Notifications: panel-only (`notify/`). The two URLs are credentials.
+    notify_spug_url: str = ""
+    #: `|`-joined Spug channels for an `/xsend/` address; empty uses its default.
+    notify_spug_channel: str = ""
+    notify_wecom_url: str = ""
+    notify_error: bool = True
+    notify_offline: bool = True
+    notify_toilet: bool = False
+    notify_feeding: bool = False
+    notify_cleaning: bool = False
+
     ha_mqtt_host: str = "localhost"
     ha_mqtt_port: int = 1883
     ha_mqtt_user: str = ""
@@ -427,6 +446,14 @@ class Config:
             "proxy_only": self.proxy_only,
             "capture": self.capture,
             "capture_dir": self.capture_dir,
+            "notify_spug_url": self.notify_spug_url,
+            "notify_spug_channel": self.notify_spug_channel,
+            "notify_wecom_url": self.notify_wecom_url,
+            "notify_error": self.notify_error,
+            "notify_offline": self.notify_offline,
+            "notify_toilet": self.notify_toilet,
+            "notify_feeding": self.notify_feeding,
+            "notify_cleaning": self.notify_cleaning,
             "bucket_endpoint": self.bucket_endpoint,
             "data_dir": self.data_dir,
         }
