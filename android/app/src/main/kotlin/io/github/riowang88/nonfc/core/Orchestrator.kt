@@ -167,7 +167,7 @@ class Orchestrator(
         BootScript.otherMounts(wrapper).forEach { log("注意：启动脚本还有其他挂载，会保留并跟着回官方：$it") }
 
         log("下载设备上的 ble、ctrl 核对 SHA")
-        link.enqueue("busybox httpd -p $HTTPD_PORT -h /app/bin &")
+        link.enqueue("busybox httpd -p $HTTPD_PORT -h /app/bin </dev/null >/dev/null 2>&1 &")
         try {
             val ble = fetchRetrying("ble")
             val ctrl = fetchRetrying("ctrl")
@@ -303,6 +303,12 @@ class Orchestrator(
      * Run a command and read back what it printed. Output goes to a one-time name in /tmp
      * and is renamed before the httpd starts, so a 200 can only ever be a complete file,
      * and a sentinel from this call rules out a leftover (`common.py::run_cmd_capture`).
+     *
+     * The httpd is backgrounded with its fds sent to /dev/null. The firmware runs each
+     * run_cmd through a pipe it reads; a foreground `busybox httpd` inherits that pipe, never
+     * daemonises cleanly, and was seen on a live T6 stuck in R never binding the port — so the
+     * phone got ConnectException while the device looked like it had "not answered". Detaching
+     * the fds lets the firmware's run_cmd return and the httpd actually listen.
      */
     private suspend fun capture(command: String, attempts: Int = CAPTURE_ATTEMPTS): String? {
         val nonce = ByteArray(8).also(SecureRandom()::nextBytes).joinToString("") { "%02x".format(it) }
@@ -311,7 +317,7 @@ class Orchestrator(
         val out = "/tmp/$name"
         link.enqueue(
             "{ $command; } > $out.part 2>&1; echo $sentinel >> $out.part; " +
-                "mv $out.part $out; busybox httpd -p $PROBE_PORT -h /tmp",
+                "mv $out.part $out; busybox httpd -p $PROBE_PORT -h /tmp </dev/null >/dev/null 2>&1 &",
         )
         try {
             repeat(attempts) {

@@ -39,6 +39,7 @@ data class UiState(
     val secondsSinceHeartbeat: Long? = null,
     val busy: String? = null,
     val found: List<BluetoothDevice> = emptyList(),
+    val scanning: Boolean = false,
     val log: List<String> = emptyList(),
 )
 
@@ -93,26 +94,66 @@ class Engine private constructor(private val context: Context) {
 
     fun setRegion(url: String) { regionUrl = url }
 
+    /**
+     * PetKit devices in pairing mode, matched by name or by the provisioning service, so a
+     * name spelled differently from the web panel's `Petkit` prefix is still found. Says
+     * what it saw when it ends: an empty list alone reads as a button that did nothing.
+     */
     fun scan() {
+        if (state.value.scanning) return
         val scanner = context.getSystemService(BluetoothManager::class.java).adapter.bluetoothLeScanner
         if (scanner == null) return log("蓝牙没打开")
-        state.update { it.copy(found = emptyList()) }
+        state.update { it.copy(found = emptyList(), scanning = true) }
+        val seen = java.util.concurrent.ConcurrentHashMap<String, String>()
         val callback = object : ScanCallback() {
             override fun onScanResult(type: Int, result: ScanResult) {
-                val name = result.device.name ?: result.scanRecord?.deviceName ?: return
-                if (!name.startsWith("Petkit") || ACCESSORIES.any(name::startsWith)) return
+                val name = result.device.name ?: result.scanRecord?.deviceName ?: ""
+                seen[result.device.address] = name
+                val provisioning = result.scanRecord?.serviceUuids?.any { it == PROVISIONING } == true
+                if (!provisioning && !name.contains("petkit", ignoreCase = true)) return
+                if (ACCESSORIES.any { name.startsWith(it, ignoreCase = true) }) return
                 state.update {
                     if (it.found.any { d -> d.address == result.device.address }) it
                     else it.copy(found = it.found + result.device)
                 }
             }
+
+            override fun onScanFailed(errorCode: Int) = log("蓝牙扫描失败（$errorCode）")
         }
+        log("扫描 ${SCAN_MS / 1000} 秒…")
         scanner.startScan(callback)
         scope.launch {
             delay(SCAN_MS)
             scanner.stopScan(callback)
+            val named = seen.values.filter { it.isNotEmpty() }.distinct()
+            log(
+                "扫描结束：看到 ${seen.size} 个蓝牙设备，可配网 ${state.value.found.size} 台" +
+                    if (named.isNotEmpty()) "。有名字的：${named.take(12).joinToString()}" else "",
+            )
+            if (state.value.found.isEmpty()) log("没找到：确认 T6 已进配网模式，且离手机不远")
+            state.update { it.copy(scanning = false) }
         }
     }
+
+    /**
+     * The network the phone is on, which is the one the device must join. Android gives an
+     * app the name with location on and permitted, and never the saved password.
+     */
+    @Suppress("DEPRECATION")
+    fun currentSsid(): String? =
+        context.getSystemService(android.net.wifi.WifiManager::class.java).connectionInfo?.ssid
+            ?.removeSurrounding("\"")?.takeIf { it.isNotEmpty() && it != "<unknown ssid>" }
+
+    /** Nearby networks, strongest first, with whether any access point offers 2.4 GHz. */
+    fun nearbyNetworks(): List<Pair<String, Boolean>> =
+        runCatching {
+            context.getSystemService(android.net.wifi.WifiManager::class.java).scanResults
+                .filter { it.SSID.isNotEmpty() }
+                .sortedByDescending { it.level }
+                .groupBy { it.SSID }
+                .map { (ssid, aps) -> ssid to aps.any { it.frequency < 3000 } }
+                .take(12)
+        }.getOrDefault(emptyList())
 
     /** BLE-point the device at this phone. The Wi-Fi password lives only in this call. */
     fun provision(device: BluetoothDevice, ssid: String, password: String) = task("配网") {
@@ -178,8 +219,9 @@ class Engine private constructor(private val context: Context) {
         server?.let { return it }
         val deviceApi = DeviceApi(ip, PORT)
         state.value.deviceIp?.let { deviceApi.restoreDevice(it, restoredType, restoredFirmware) }
-        val http = PhoneServer(deviceApi, PORT)
+        val http = PhoneServer(deviceApi, PORT, ::log)
         http.start(30_000, false)
+        log("手机服务已在 $ip:$PORT 监听")
         api = deviceApi
         server = http
         state.update { it.copy(phoneIp = ip) }
@@ -259,6 +301,8 @@ class Engine private constructor(private val context: Context) {
             Region("美洲", "https://api.petkt.com/6/"),
             Region("俄罗斯", "https://api-ru.petkit.cn/6/"),
         )
+
+        private val PROVISIONING = android.os.ParcelUuid.fromString("0000aaa0-0000-1000-8000-00805f9b34fb")
 
         private val ACCESSORIES = listOf(
             "Petkit_W5", "Petkit_W4X", "Petkit_CTW2", "Petkit_CTW3", "Petkit_K2", "Petkit_K3",
