@@ -30,6 +30,10 @@ Two rules about placement that the map does not make obvious:
 - `events/codes.py` and `devices/payloads.py` carry almost all the reverse-engineered protocol and
   are deliberately large. Everything below is about not breaking them.
 
+`android/` is a separate Gradle project, a phone-side tool for the T6 no-NFC patch. It shares no
+code with the add-on: `NoNfcPatch.kt` repeats the offsets and hashes of `patchers/no_nfc.py`, so
+change both, and `android/README.md` says how to prove they still agree.
+
 ## Invariants — do not break these
 
 - **All protocol knowledge lives in `events/codes.py`** — seven namespaces, each row graded
