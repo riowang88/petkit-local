@@ -29,6 +29,7 @@ from petkit_local.media.crypto import resolve_key_string
 from petkit_local.media.go2rtc import Go2rtc
 from petkit_local.media.retention import RetentionConfig
 from petkit_local.mqtt.bridge import MQTTBridge
+from petkit_local.notify.notifier import Notifier
 from petkit_local.mqtt.upstream import (
     CREDENTIALS_FILENAME, UpstreamCredentials, UpstreamMQTT,
 )
@@ -61,6 +62,7 @@ class Services:
     mqtt_bridge: MQTTBridge | None
     upstream_mqtt: UpstreamMQTT | None
     go2rtc: Go2rtc
+    notifier: Notifier
     app_config: dict[str, Any]
     media_root: str
     cert_path: str
@@ -190,6 +192,8 @@ def build_services(config: Config, args: argparse.Namespace) -> Services:
     app_config = config.to_app_config()
     ptz.configure(config.api_url)
 
+    notifier = Notifier(app_config, registry, pet_registry)
+
     # The camera sidecar. Constructed here so the panel and the HA publisher can
     # ask it for an RTSP URL; it starts nothing until `start_background` and
     # nothing at all unless a device is actually serving a stream.
@@ -217,7 +221,7 @@ def build_services(config: Config, args: argparse.Namespace) -> Services:
             registry, ha_publisher, ble_registry,
             api_url=config.api_url, hub=hub,
             event_store=event_store, pet_registry=pet_registry,
-            live_config=app_config, upstream=upstream_mqtt,
+            live_config=app_config, upstream=upstream_mqtt, notifier=notifier,
         )
         publish_local.bridge = mqtt_bridge
 
@@ -231,6 +235,7 @@ def build_services(config: Config, args: argparse.Namespace) -> Services:
     app["event_store"] = event_store
     app["pet_registry"] = pet_registry
     app["ha_publisher"] = ha_publisher
+    app["notifier"] = notifier
     # Written by the proxy middleware when a proxied dev_iot_device_info reveals
     # the device's real Aliyun credentials — the only place they can be learned.
     app["proxy_upstream_creds"] = upstream_creds
@@ -259,6 +264,7 @@ def build_services(config: Config, args: argparse.Namespace) -> Services:
         mqtt_bridge=mqtt_bridge,
         upstream_mqtt=upstream_mqtt,
         go2rtc=go2rtc,
+        notifier=notifier,
         app_config=app_config,
         media_root=media_root,
         cert_path=cert_path,

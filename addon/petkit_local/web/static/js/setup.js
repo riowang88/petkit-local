@@ -123,6 +123,25 @@ async function loadSetup() {
     </div>
     ${on ? '<div id="blockedView" style="margin-top:14px"></div>' : ''}
   </section>
+  <section class="sgroup"><h3>通知${help(
+    '地址本身就是密钥，保存后不再显示。输入框留空并点“设置”会清除地址。修改立即生效。',
+  )}</h3>
+    <div class="sbox">
+      ${notifyField('notifySpug', 'notify_spug_url', 'Spug 地址', 'https://push.spug.cc/xsend/…', s.notify_spug_url)}
+      <label class="field"><span>Spug 通道${help(
+        '仅 xsend 地址生效，用 | 连接，例如 wx_mp|mail。wx_mp 是微信公众号。留空使用默认通道。',
+      )}</span><span class="cn">
+        <input id="notifySpugChannel" data-always-set value="${esc(s.notify_spug_channel || '')}" ${w ? '' : 'disabled'} placeholder="wx_mp">
+        <button class="mini" ${w ? '' : 'disabled'} data-action="save-notify" data-key="notify_spug_channel" data-input="notifySpugChannel">设置</button></span></label>
+      ${notifyField('notifyWecom', 'notify_wecom_url', '企业微信机器人', 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…', s.notify_wecom_url)}
+      <label class="ctrl"><span>设备故障</span>${sw('notify_error', s.notify_error)}</label>
+      <label class="ctrl"><span>设备离线与恢复</span>${sw('notify_offline', s.notify_offline)}</label>
+      <label class="ctrl"><span>如厕记录</span>${sw('notify_toilet', s.notify_toilet)}</label>
+      <label class="ctrl"><span>喂食完成</span>${sw('notify_feeding', s.notify_feeding)}</label>
+      <label class="ctrl"><span>清理完成</span>${sw('notify_cleaning', s.notify_cleaning)}</label>
+    </div>
+    <div class="form-actions"><span class="grow"></span><button class="act" ${s.notify_spug_url || s.notify_wecom_url ? '' : 'disabled'} data-action="notify-test">发送测试通知</button></div>
+  </section>
   <section class="sgroup"><h3>诊断</h3>
     <div class="sbox">
       <label class="ctrl"><span>流量记录<small>将 HTTP 和 MQTT 记录为 JSONL，文件在“流量记录”中查看</small></span>${sw('capture', s.capture)}</label>
@@ -176,6 +195,25 @@ onAction('save-proxy-dns', () =>
 onAction('save-proxy-upstream', () =>
   saveSetting('proxy_upstream', document.getElementById('proxyUp').value),
 );
+onAction('save-notify', el =>
+  saveSetting(el.dataset.key, document.getElementById(el.dataset.input).value),
+);
+onAction('notify-test', async () => {
+  const r = await api('notify/test', { method: 'POST' });
+  const failed = Object.entries(r.results || {}).filter(([, error]) => error);
+  toast(
+    r.ok
+      ? '测试通知已被服务接受'
+      : '错误：' + (r.error || failed.map(([k, error]) => `${k}: ${error}`).join('；')),
+  );
+});
+// A saved address never comes back from the server; the placeholder is all that
+// says one is there.
+function notifyField(id, key, title, hint, value) {
+  return `<label class="field"><span>${title}</span><span class="cn">
+    <input id="${id}" data-always-set type="password" autocomplete="off" placeholder="${value ? '已配置' : esc(hint)}">
+    <button class="mini" data-action="save-notify" data-key="${key}" data-input="${id}">设置</button></span></label>`;
+}
 function renderCustomUpstream() {
   const sel = document.getElementById('proxyUpSel');
   if (sel && !document.getElementById('proxyUp')) {

@@ -237,6 +237,14 @@ def test_every_live_key_round_trips_through_the_overrides_file():
         "proxy_mqtt_bridge": False,
         "proxy_only": "dev_device_info",
         "capture": True,
+        "notify_spug_url": "https://push.spug.cc/xsend/abc",
+        "notify_spug_channel": "wx_mp",
+        "notify_wecom_url": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=abc",
+        "notify_error": False,
+        "notify_offline": False,
+        "notify_toilet": True,
+        "notify_feeding": True,
+        "notify_cleaning": True,
     }
     assert set(non_default) == set(PANEL_LIVE_KEYS)
 

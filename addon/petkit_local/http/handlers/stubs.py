@@ -203,6 +203,10 @@ async def handle_event_report(request: web.Request) -> web.Response:
 
     await store.upsert_event(row)
 
+    notifier = request.app.get("notifier")
+    if notifier is not None:
+        notifier.on_event(device, row)
+
     if row.get("pet_id") is not None and pet_registry is not None and ha_publisher is not None:
         pet = await pet_registry.get(row["pet_id"])
         if pet:

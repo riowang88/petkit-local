@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Notifications through Spug and a WeCom group robot.** Setup -> Settings has
+  an address for each, a switch per topic (faults, offline and recovery, toilet
+  visits, feeding, cleaning) and a test button. Faults and offline are on by
+  default. It works over both transports and without Home Assistant. A saved
+  address is write-only: it never comes back from the panel or reaches the log.
 - **A no-NFC bag patcher for the T6 on firmware 1.951.** It changes only the
   two Linux programs that treat a missing NFC tag as a missing bag, and uses
   factory bag profile 1 in that case. The screen check that records error 28

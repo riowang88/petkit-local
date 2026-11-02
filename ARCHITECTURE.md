@@ -48,6 +48,7 @@ petkit_local/
 │                  crypto · transcode · layout · retention · go2rtc
 ├── web/           panel.py the application + the whole route table · api/ the JSON handlers
 │                  appkeys.py the app[...] contract · hub.py event ring/WS · static/ · templates/
+├── notify/        channels.py Spug + WeCom robot · notifier.py event -> queued message, offline watch
 ├── patchers/      on-device patches: cacert · mqtt · cloud · camera · ssh
 ├── ai/pets.py     pet CRUD + the face photos the device's NPU matches against
 └── utils/         const · crypto · capture · jsonio · paths · coerce · dicts · timeutil

@@ -150,6 +150,7 @@ async def start_background(services: Services, app_instance: web.Application) ->
     # BEFORE `runner.setup()`, which freezes the Application and makes a new
     # key a DeprecationWarning today and an error under aiohttp 4.
     panel["go2rtc"] = go2rtc
+    panel["notifier"] = services.notifier
     runner = web.AppRunner(panel)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", config.web_port).start()
@@ -224,6 +225,10 @@ async def start_background(services: Services, app_instance: web.Application) ->
         _spawn(app_instance, "ha-publisher", ha_publisher.start())
         _spawn(app_instance, "availability-watchdog",
                ha_publisher.availability_watchdog(config.offline_timeout))
+
+    _spawn(app_instance, "notifier", services.notifier.run())
+    _spawn(app_instance, "offline-notifier",
+           services.notifier.watch_offline(config.offline_timeout))
 
     # A BLE accessory reports only when we tell its parent to open a
     # session. Reacting to the parent's own traffic is not enough — a

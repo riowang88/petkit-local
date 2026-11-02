@@ -69,7 +69,9 @@ from petkit_local.web.api.pets import (
     api_pets_import, api_pets_list_create, api_pets_unbound,
 )
 from petkit_local.web.api.schedules import api_deferred_feed, api_save_schedule
-from petkit_local.web.api.settings import api_blocked, api_info, api_retention, api_settings
+from petkit_local.web.api.settings import (
+    api_blocked, api_info, api_notify_test, api_retention, api_settings,
+)
 from petkit_local.web.api.sounds import (
     api_sounds_delete, api_sounds_list, api_sounds_play,
     api_sounds_select, api_sounds_upload,
@@ -244,6 +246,7 @@ def create_panel_app(registry: DeviceRegistry, ble_registry: BLERegistry | None,
     # --- settings ---
     app.router.add_get("/api/settings", api_settings)
     app.router.add_post("/api/settings", api_settings)
+    app.router.add_post("/api/notify/test", api_notify_test)
     app.router.add_get("/api/blocked", api_blocked)
     app.router.add_get("/api/retention", api_retention)
     app.router.add_post("/api/retention", api_retention)

@@ -19,6 +19,9 @@ from urllib.parse import urlparse
 from aiohttp import web
 
 from petkit_local.http.proxy import DEFAULT_UPSTREAM, UPSTREAM_PRESETS
+from petkit_local.notify.channels import (
+    valid_spug_channel, valid_spug_url, valid_wecom_url,
+)
 from petkit_local.utils.coerce import to_int
 from petkit_local.utils.const import (
     DEVICE_NAMES, DEVICE_TYPES_AI, VERSION,
@@ -48,7 +51,21 @@ LIVE_SETTINGS = {
     "proxy_mqtt_bridge": bool,
     "proxy_only": str,
     "capture": bool,
+    "notify_spug_url": str,
+    "notify_spug_channel": str,
+    "notify_wecom_url": str,
+    "notify_error": bool,
+    "notify_offline": bool,
+    "notify_toilet": bool,
+    "notify_feeding": bool,
+    "notify_cleaning": bool,
 }
+
+#: Settings that are credentials. This panel is served with no authentication,
+#: so one is write-only from here: reads, write replies and the log all carry
+#: `SECRET_SET` in its place.
+SECRET_SETTINGS = frozenset({"notify_spug_url", "notify_wecom_url"})
+SECRET_SET = "configured"
 
 #: Defaults for `LIVE_SETTINGS`, used when the shared config has no value yet.
 #: Both guards default ON: proxy mode is a debugging tool, and a debugging tool
@@ -65,7 +82,20 @@ LIVE_SETTING_DEFAULTS = {
     "proxy_mqtt_bridge": True,
     "proxy_only": "",
     "capture": False,
+    "notify_spug_url": "",
+    "notify_spug_channel": "",
+    "notify_wecom_url": "",
+    "notify_error": True,
+    "notify_offline": True,
+    "notify_toilet": False,
+    "notify_feeding": False,
+    "notify_cleaning": False,
 }
+
+
+def _shown(settings: dict[str, Any]) -> dict[str, Any]:
+    """`settings` with every set credential replaced by `SECRET_SET`."""
+    return {k: SECRET_SET if k in SECRET_SETTINGS and v else v for k, v in settings.items()}
 
 
 def _current_settings(request: web.Request) -> dict[str, Any]:
@@ -84,7 +114,7 @@ def _current_settings(request: web.Request) -> dict[str, Any]:
     for key, typ in LIVE_SETTINGS.items():
         value = live.get(key, fallbacks[key])
         settings[key] = bool(value) if typ is bool else (value or "")
-    return settings
+    return _shown(settings)
 
 
 def _valid_upstream(value: str) -> bool:
@@ -121,7 +151,13 @@ def _valid_dns(value: str) -> bool:
 
 #: Extra validation for settings whose value is not just a type. `api_settings`
 #: coerces to bool or str; anything with a narrower domain is checked here.
-LIVE_SETTING_VALIDATORS = {"proxy_upstream": _valid_upstream, "proxy_dns": _valid_dns}
+LIVE_SETTING_VALIDATORS = {
+    "proxy_upstream": _valid_upstream,
+    "proxy_dns": _valid_dns,
+    "notify_spug_url": valid_spug_url,
+    "notify_spug_channel": valid_spug_channel,
+    "notify_wecom_url": valid_wecom_url,
+}
 
 
 async def api_settings(request: web.Request) -> web.Response:
@@ -149,7 +185,7 @@ async def api_settings(request: web.Request) -> web.Response:
         typ = LIVE_SETTINGS.get(key)
         if typ is None:
             continue
-        val = bool(val) if typ is bool else str(val)
+        val = bool(val) if typ is bool else str(val).strip()
         validator = LIVE_SETTING_VALIDATORS.get(key)
         if validator is not None and not validator(val):
             return web.json_response({"error": f"bad value for {key}"}, status=400)
@@ -176,8 +212,24 @@ async def api_settings(request: web.Request) -> web.Response:
         except OSError as e:
             log.warning("panel: could not persist settings overrides: %s", e)
 
-    log.info("panel: runtime settings changed: %s", changed)
-    return web.json_response({"ok": True, "changed": changed, "settings": _current_settings(request)})
+    shown = _shown(changed)
+    log.info("panel: runtime settings changed: %s", shown)
+    return web.json_response({"ok": True, "changed": shown, "settings": _current_settings(request)})
+
+
+async def api_notify_test(request: web.Request) -> web.Response:
+    """`POST /api/notify/test` — send a test message on every configured channel.
+
+    Answers `{ok, results: {channel: error}}`, "" meaning the service accepted
+    it; 400 with nothing configured, 429 if the last test was too recent.
+    """
+    notifier = request.app.get("notifier")
+    if notifier is None or not notifier.configured():
+        return web.json_response({"error": "no notification channel configured"}, status=400)
+    results = await notifier.send_test()
+    if results is None:
+        return web.json_response({"error": "too soon, wait a few seconds"}, status=429)
+    return web.json_response({"ok": not any(results.values()), "results": results})
 
 
 #: How much of a blocked payload is shown before `?reveal=1`.
