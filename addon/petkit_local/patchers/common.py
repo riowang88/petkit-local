@@ -448,6 +448,37 @@ def md5hex(data: bytes) -> str:
     return hashlib.md5(data).hexdigest()
 
 
+def build_verified_download_cmd(url: str, dest: str, md5: str, *,
+                                executable: bool = True) -> str:
+    """Shell that downloads `url` onto `dest` only if what arrived is the file.
+
+    The download lands on `dest.new`; `dest` is replaced only once the md5 of
+    `dest.new` matches. A 404, a connection cut mid-transfer, or a reply that is
+    not the file removes `dest.new` and leaves `dest` exactly as it was.
+
+    Every patcher file goes through this, because every one of them is either
+    the boot script or something the boot script mounts over a stock program:
+    `wget -O dest` truncates `dest` before the first byte arrives, and a T6 that
+    booted from a 13-byte `/system/app_init.sh` started no ble, ctrl or screen
+    and had to be recovered over a soldered serial port. A read-back afterwards
+    cannot help the file — it only decides whether to reboot into it.
+
+    `grep` rather than `md5sum -c`: this busybox is stripped, and both `md5sum`
+    and `grep -q` are already relied on. The rename is also what lets a file
+    that is currently bind-mounted and running be replaced at all.
+
+    Returns:
+        One brace group, exit 0 only if `dest` now holds the verified bytes, so
+        it can be chained with `&&`.
+    """
+    chmod = f"chmod +x {dest}.new && " if executable else ""
+    return (
+        f"{{ wget -q -O {dest}.new {url} && "
+        f"md5sum {dest}.new | grep -q {md5} && "
+        f"{chmod}mv -f {dest}.new {dest} || {{ rm -f {dest}.new; false; }}; }}"
+    )
+
+
 # --------------- Unified /system/app_init.sh wrapper -------------------------
 # Boot chain: kernel → system_init.sh → if /system/app_init.sh exists, run it
 # INSTEAD of /app/script/app_init.sh (stock, read-only squashfs).

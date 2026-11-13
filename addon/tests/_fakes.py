@@ -30,3 +30,37 @@ class FakeMessage:
     def __init__(self, topic: Any, payload: Any) -> None:
         self.topic = topic
         self.payload = payload
+
+
+class EchoingDevice:
+    """Stands in for the device's storage in a patcher apply/remove flow.
+
+    Wraps `stage_file` to remember every file the flow staged, and answers the
+    `md5sum` read-back as a device would if each download landed: the md5 of the
+    staged file whose name is the path's basename. Name a basename in `lost` and
+    its read-back comes back empty, the way it does when the file never arrived.
+    """
+
+    def __init__(self, module, monkeypatch):
+        import hashlib
+        import os
+        from unittest.mock import AsyncMock
+
+        self.staged: dict[str, bytes] = {}
+        self.lost: set[str] = set()
+        real_stage = module.stage_file
+
+        def stage(name, data, device_id):
+            self.staged[name] = data
+            return real_stage(name, data, device_id)
+
+        async def capture(device, device_ip, command, **kwargs):
+            lines = []
+            for path in command.split()[1:]:
+                name = os.path.basename(path)
+                if name in self.staged and name not in self.lost:
+                    lines.append(f"{hashlib.md5(self.staged[name]).hexdigest()}  {path}")
+            return "\n".join(lines)
+
+        monkeypatch.setattr(module, "stage_file", stage)
+        monkeypatch.setattr(module, "run_cmd_capture", AsyncMock(side_effect=capture))
