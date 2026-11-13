@@ -3,3 +3,5 @@
 local.properties
 *.iml
 .idea/
+app/local-assets/
+recordings/

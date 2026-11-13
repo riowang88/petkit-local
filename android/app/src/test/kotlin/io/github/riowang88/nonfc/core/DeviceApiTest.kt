@@ -26,6 +26,28 @@ class DeviceApiTest {
     }
 
     @Test
+    fun eventReportsAckWithTheSuccessStringNotAnEmptyObject() {
+        // Stock ctrl strcmp's result.valuestring against "success" and SIGSEGVs on a NULL
+        // valuestring, i.e. on {"result":{}}. See DeviceApi.SUCCESS.
+        for (path in listOf("/6/t6/dev_event_report", "/6/t6/dev_ota_start", "/6/t6/dev_ota_complete")) {
+            val reply = call(path)
+            assertEquals(path, 200, reply.status)
+            assertEquals(path, "success", json(reply).getString("result"))
+        }
+    }
+
+    @Test
+    fun ossStsAnswersWithTheOciShapeNotAnEmptyObject() {
+        // ctrl parses result.type + result.capability[]; an empty object makes it jump
+        // through a missing field (live crash epc==ra==0x61656270). Mirror the add-on.
+        for (path in listOf("/6/t6/dev_oss_sts_info_new", "/6/t6/dev_oss_sts_info_new_v2")) {
+            val result = json(call(path)).getJSONObject("result")
+            assertEquals(path, "oci", result.getString("type"))
+            assertEquals(path, 0, result.getJSONArray("capability").length())
+        }
+    }
+
+    @Test
     fun unknownPathsNever404() {
         val reply = call("/6/t6/dev_something_new")
         assertEquals(200, reply.status)
@@ -101,8 +123,33 @@ class DeviceApiTest {
         val url = api.stage("ble_patched", byteArrayOf(1, 2, 3))
         val path = url.substringAfter(":8080")
         assertEquals(3, call(path).body.size)
-        assertEquals("application/json", call(path, from = stranger).contentType)
+        assertEquals(404, call(path, from = stranger).status)
         api.unstage("ble_patched")
-        assertEquals("application/json", call(path).contentType)
+        assertEquals(404, call(path).status)
+    }
+
+    /** `wget` writes a 200 into the file it was given: a miss here must not be one. */
+    @Test
+    fun aStagedFileThatIsNotThereIsA404AndNeverTheEmptyResult() {
+        call("/6/t6/dev_signup")
+        val path = api.stage("app_init.sh", "#!/bin/sh\n".toByteArray()).substringAfter(":8080")
+        api.unstage("app_init.sh")
+        val wrongToken = path.replace(Regex("/patcher/[^/]+/"), "/patcher/0000000000000000/")
+        listOf(path, wrongToken, "/patcher/app_init.sh", "/patcher", "/patcher/a/b/c").forEach {
+            val reply = call(it)
+            assertEquals(it, 404, reply.status)
+            assertFalse(it, "result" in String(reply.body))
+        }
+    }
+
+    @Test
+    fun aCommandCanBeTakenBackOnlyBeforeTheDeviceCollectsIt() {
+        call("/6/t6/dev_signup")
+        api.enqueue("first")
+        assertTrue(api.cancel("first"))
+        assertTrue(api.queueIsEmpty())
+        api.enqueue("second")
+        call("/6/poll/t6/heartbeat")
+        assertFalse(api.cancel("second"))
     }
 }

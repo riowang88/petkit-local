@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NFC waves struck through: the tool that takes NFC out of a T6. Everything stays inside
+     the 66dp safe circle of the 108dp adaptive canvas, so no launcher mask clips it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FAF9F5"
+        android:pathData="M41,67m-4.5,0a4.5,4.5 0,1 0,9 0a4.5,4.5 0,1 0,-9 0" />
+    <path
+        android:strokeColor="#FAF9F5"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M52,67A11,11 0,0 0,41 56M61,67A20,20 0,0 0,41 47M70,67A29,29 0,0 0,41 38" />
+    <!-- Coral underneath the slash cuts a gap into the waves, so the stroke reads on its own. -->
+    <path
+        android:strokeColor="#CC785C"
+        android:strokeWidth="11"
+        android:strokeLineCap="round"
+        android:pathData="M34,34L74,74" />
+    <path
+        android:strokeColor="#FAF9F5"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M34,34L74,74" />
+</vector>

@@ -75,13 +75,19 @@ class DeviceApi(private val phoneHost: String, private val port: Int) {
     }
 
     fun enqueue(command: String) {
-        queue.add(
-            JSONObject()
-                .put("msgType", 0)
-                .put("user_cmd", JSONObject().put("run_cmd", command))
-                .toString(),
-        )
+        queue.add(wrap(command))
     }
+
+    /**
+     * Take back a command no heartbeat has collected yet. False means the device already
+     * has it, and it may still run: whoever gave up waiting must assume that it will.
+     */
+    fun cancel(command: String): Boolean = synchronized(queue) { queue.remove(wrap(command)) }
+
+    private fun wrap(command: String) = JSONObject()
+        .put("msgType", 0)
+        .put("user_cmd", JSONObject().put("run_cmd", command))
+        .toString()
 
     fun queueIsEmpty() = queue.isEmpty()
 
@@ -95,7 +101,7 @@ class DeviceApi(private val phoneHost: String, private val port: Int) {
     fun handle(path: String, query: Map<String, String>, remote: String, now: Long): Reply {
         lastRequestMs = now
         val parts = path.trim('/').split('/')
-        if (parts.size == 3 && parts[0] == "patcher") return serveStaged(parts[1], parts[2], remote)
+        if (parts[0] == "patcher") return serveStaged(parts, remote)
         return when (parts.last()) {
             "dev_syncTime" -> json("""{"result":${now / 1000}}""")
             "dev_signup" -> signup(parts, query, remote)
@@ -104,6 +110,21 @@ class DeviceApi(private val phoneHost: String, private val port: Int) {
                 iotInfo(query, now)
             "heartbeat" -> heartbeat(remote, now)
             "dev_ble_device" -> json("""{"result":{"list":[],"nextTick":3600}}""")
+            // Stock ctrl's `pk_send_http_event_msg` (network_event_state.c) does
+            // `strcmp(cJSON_GetObjectItem(resp,"result")->valuestring, "success")` with no
+            // null-check. An empty `{"result":{}}` makes `result` an OBJECT, valuestring is
+            // NULL, and ctrl SIGSEGVs (invalid read from 0) every time it reports an event,
+            // crashing and respawning every ~80s. The real cloud — and the add-on's
+            // `handle_event_report` — answer the STRING "success"; mirror that. Confirmed on a
+            // live T6: epc in libc str*, ra=0x439570 in ctrl, faulting address 0x00000000.
+            "dev_event_report", "dev_ota_start", "dev_ota_complete" -> SUCCESS
+            // ctrl's `union_info_parse_oci` reads `result.type` (a string) and iterates
+            // `result.capability` (an array). An empty `{"result":{}}` leaves `type` absent,
+            // and ctrl jumps through the missing field — a wild `jr` to ASCII (seen live:
+            // epc==ra==badvaddr==0x61656270). The add-on's no-bucket answer is this exact
+            // shape and runs in the field without crashing: type "oci", no upload targets.
+            "dev_oss_sts_info_new", "dev_oss_sts_info_new_v2" ->
+                json("""{"result":{"type":"oci","capability":[]}}""")
             else -> EMPTY
         }
     }
@@ -190,16 +211,34 @@ class DeviceApi(private val phoneHost: String, private val port: Int) {
         return json(JSONObject().put("result", entries).toString())
     }
 
-    private fun serveStaged(wanted: String, name: String, remote: String): Reply {
-        val data = staged[name]
-        if (wanted != token || remote != deviceIp || data == null) return EMPTY
+    /**
+     * A miss is a 404, the one place this class answers one. This path is fetched by
+     * `wget`, not by the firmware, and `wget` writes whatever a 200 carries into the file
+     * it was told to: the 13 bytes of [EMPTY] served here once replaced a T6's
+     * `/system/app_init.sh`, and the box booted with no ble, ctrl or screen. A miss is
+     * routine, too — the command that fetches a file can reach the device after the
+     * phone gave up on it and unstaged the file.
+     */
+    private fun serveStaged(parts: List<String>, remote: String): Reply {
+        val data = if (parts.size == 3) staged[parts[2]] else null
+        if (data == null || parts[1] != token || remote != deviceIp) return NOT_FOUND
         return Reply(data, "application/octet-stream")
     }
 
     private fun json(text: String) = Reply(text.toByteArray())
 
     private companion object {
-        /** Never a 404: firmware reads 4xx as a server fault and retries forever. */
+        /**
+         * Never a 404 to the FIRMWARE, which reads 4xx as a server fault and retries
+         * forever. Staged files are the exception, see [serveStaged].
+         */
         val EMPTY = Reply("""{"result":{}}""".toByteArray())
+
+        /**
+         * The report/ACK shape stock ctrl string-compares against. `result` MUST be the
+         * string "success", not an object: ctrl reads `result.valuestring` unconditionally.
+         */
+        val SUCCESS = Reply("""{"result":"success"}""".toByteArray())
+        val NOT_FOUND = Reply("not found\n".toByteArray(), "text/plain", 404)
     }
 }

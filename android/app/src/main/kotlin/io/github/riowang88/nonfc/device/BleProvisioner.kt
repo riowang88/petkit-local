@@ -27,7 +27,11 @@ import java.util.concurrent.ConcurrentHashMap
  * captures of the official app. Only the Ingenic protocol: a T6 is an Ingenic device.
  */
 @SuppressLint("MissingPermission")
-class BleProvisioner(private val context: Context, private val log: (String) -> Unit) {
+class BleProvisioner(
+    private val context: Context,
+    private val log: (String) -> Unit,
+    private val step: (String) -> Unit = {},
+) {
     class Wifi(val ssid: String, val password: String)
 
     private val replies = ConcurrentHashMap<Int, JSONObject>()
@@ -36,6 +40,8 @@ class BleProvisioner(private val context: Context, private val log: (String) -> 
     private var mtu = 23
     private var seq = 0
     private var inbound = ByteArray(0)
+    private var notifications = 0
+    private var unparsed: ByteArray? = null
 
     @Volatile private var ready: CompletableDeferred<Unit>? = null
     @Volatile private var acked: CompletableDeferred<Boolean>? = null
@@ -43,16 +49,22 @@ class BleProvisioner(private val context: Context, private val log: (String) -> 
     /** Provision the device, and report whether it said it reached the server. */
     suspend fun provision(device: BluetoothDevice, wifi: Wifi, server: String): Boolean {
         try {
+            step("用蓝牙连接设备（几秒）")
             connect(device)
-            send(JSONObject().put("key", 110))
-            if (!awaitReply(110)) {
-                log("没有身份回复，重试 key 110")
+            log("已连上 GATT：MTU $mtu，写入${if (noAck()) "无" else "有"}响应")
+            step("读取设备信息")
+            var asked = 0
+            while (!replies.containsKey(110)) {
+                if (asked == IDENTITY_TRIES) error("设备没回应身份请求（${heard()}）。确认它刚进配网模式，且官方 App 已彻底关闭")
+                if (asked > 0) log("没有身份回复（${heard()}），重试 key 110")
                 send(JSONObject().put("key", 110))
-                if (!awaitReply(110)) error("设备没回应，确认它还在配网模式")
+                asked++
+                awaitReply(110)
             }
             log("设备身份：${describe(replies[110])}")
             delay(1045)
 
+            step("把 Wi-Fi 和手机地址发给设备")
             log("写入 Wi-Fi 和服务器地址（key 151）")
             send(JSONObject().put("key", 151).put("payload", payload(wifi, server)))
             for (i in 0 until 20) {
@@ -61,6 +73,7 @@ class BleProvisioner(private val context: Context, private val log: (String) -> 
             }
             if (replies[151]?.optInt("state") != 1) error("设备没有接受配置（无 state:1）")
 
+            step("等设备连上 Wi-Fi（通常 1 分钟内，最长约 1 分半）")
             log("配置已接受，等设备入网")
             var shown: Int? = null
             for (i in 0 until 25) {
@@ -70,9 +83,12 @@ class BleProvisioner(private val context: Context, private val log: (String) -> 
                 if (state != shown) {
                     shown = state
                     log("设备状态：${PkFrame.JOIN_STATES[state] ?: "state $state"}")
+                    // The device's own report is already plain words: show it as it comes.
+                    PkFrame.JOIN_STATES[state]?.let { step("等设备连上 Wi-Fi：$it") }
                 }
                 if (state in PkFrame.JOIN_FAILED) error("设备放弃：${PkFrame.JOIN_STATES[state]}")
                 if (state in PkFrame.JOIN_DONE) {
+                    step("设备已连上 Wi-Fi，正在确认")
                     delay(5780)
                     send(JSONObject().put("key", 112))
                     delay(1030)
@@ -127,7 +143,7 @@ class BleProvisioner(private val context: Context, private val log: (String) -> 
     private suspend fun send(message: JSONObject) {
         val frame = PkFrame.frame(seq++, message.toString())
         val target = write ?: error("没有写特征")
-        val noAck = target.properties and BluetoothGattCharacteristic.PROPERTY_WRITE == 0
+        val noAck = noAck()
         // A with-response write longer than the MTU becomes an ATT long write, which is
         // what Web Bluetooth does. Without-response has no such thing, so it is cut up.
         val chunks = if (noAck) frame.toList().chunked(mtu - 3).map { it.toByteArray() } else listOf(frame)
@@ -144,6 +160,20 @@ class BleProvisioner(private val context: Context, private val log: (String) -> 
         }
     }
 
+    private fun noAck(): Boolean =
+        (write?.properties ?: 0) and BluetoothGattCharacteristic.PROPERTY_WRITE == 0
+
+    /**
+     * What came back so far, for a failure message: no notification at all points at the
+     * subscription or a device not listening; notifications that do not parse point at the
+     * framing, and their first bytes say how.
+     */
+    private fun heard(): String {
+        val raw = unparsed ?: return "收到 $notifications 条通知"
+        val hex = raw.take(24).joinToString(" ") { "%02x".format(it) }
+        return "收到 $notifications 条通知，最后一条无法解析：$hex"
+    }
+
     @Suppress("DEPRECATION")
     private fun writeValue(target: BluetoothGattCharacteristic, data: ByteArray): Boolean {
         val g = gatt ?: return false
@@ -156,11 +186,13 @@ class BleProvisioner(private val context: Context, private val log: (String) -> 
     }
 
     private fun onNotify(value: ByteArray) {
+        notifications++
         // A reply can span notifications. Each frame opens with the magic and says its size.
         inbound = if (PkFrame.hasMagic(value)) value else inbound + value
         val size = PkFrame.expectedSize(inbound)
         if (size != null && inbound.size < size) return
         val message = PkFrame.parse(inbound)
+        if (message == null || !message.has("key")) unparsed = inbound
         inbound = ByteArray(0)
         if (message == null || !message.has("key")) return
         val key = message.getInt("key")
@@ -203,7 +235,12 @@ class BleProvisioner(private val context: Context, private val log: (String) -> 
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int) {
-            ready?.complete(Unit)
+            // A refused subscription still "connects", then every reply is silently lost.
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                ready?.complete(Unit)
+            } else {
+                ready?.completeExceptionally(IllegalStateException("打开通知失败（status $status）"))
+            }
         }
 
         override fun onCharacteristicWrite(
@@ -240,6 +277,7 @@ class BleProvisioner(private val context: Context, private val log: (String) -> 
 
     private companion object {
         const val TIMEOUT_MS = 15_000L
+        const val IDENTITY_TRIES = 3
         val SERVICE: UUID = UUID.fromString("0000aaa0-0000-1000-8000-00805f9b34fb")
         val NOTIFY: UUID = UUID.fromString("0000aaa1-0000-1000-8000-00805f9b34fb")
         val WRITE: UUID = UUID.fromString("0000aaa2-0000-1000-8000-00805f9b34fb")

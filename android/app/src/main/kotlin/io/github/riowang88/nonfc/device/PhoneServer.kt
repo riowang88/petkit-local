@@ -38,10 +38,11 @@ class PhoneServer(
         )
         val idle = session.uri.endsWith("/heartbeat") && "run_cmd" !in String(reply.body)
         if (!idle || idleBeats++ % 10 == 0) {
-            log("← ${session.remoteIpAddress} ${session.method} ${session.uri} → ${reply.body.size}B")
+            log("← ${session.remoteIpAddress} ${session.method} ${session.uri} → ${reply.status} ${reply.body.size}B")
         }
+        // The status has to cross: a staged-file miss sent as 200 is a file to `wget`.
         return newFixedLengthResponse(
-            Response.Status.OK,
+            Response.Status.lookup(reply.status) ?: Response.Status.INTERNAL_ERROR,
             reply.contentType,
             ByteArrayInputStream(reply.body),
             reply.body.size.toLong(),
@@ -54,6 +55,7 @@ class PhoneServer(
     override val handedBackAtMs get() = api.handedBackAtMs
 
     override fun enqueue(command: String) = api.enqueue(command)
+    override fun cancel(command: String) = api.cancel(command)
     override fun queueIsEmpty() = api.queueIsEmpty()
     override fun stage(name: String, data: ByteArray) = api.stage(name, data)
     override fun unstage(name: String) = api.unstage(name)
