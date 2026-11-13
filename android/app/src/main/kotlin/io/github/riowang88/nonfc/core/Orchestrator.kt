@@ -11,6 +11,9 @@ interface DeviceLink {
     val handedBackAtMs: Long
 
     fun enqueue(command: String)
+
+    /** Take back a command the device has not collected. False: it has, and may run it. */
+    fun cancel(command: String): Boolean
     fun queueIsEmpty(): Boolean
     fun stage(name: String, data: ByteArray): String
     fun unstage(name: String)
@@ -35,6 +38,12 @@ data class Installed(val bleMd5: String, val ctrlMd5: String)
  * Every step that writes proves itself by reading back in the same command, through
  * [capture], rather than sleeping and hoping: the heartbeat has no delivery report. Nothing
  * reboots the device until the read-back matched.
+ *
+ * The read-back only decides whether to REBOOT. It cannot protect the file, because by then
+ * the file is written, and a command can run after this class stopped waiting for it. So
+ * every download goes through [verified]: the device checks the md5 of what it fetched
+ * before the name it boots from is touched. A T6 was bricked by the order being the other
+ * way round.
  */
 class Orchestrator(
     private val link: DeviceLink,
@@ -43,13 +52,24 @@ class Orchestrator(
     private val publicKey: String,
     private val prepare: (ByteArray, ByteArray) -> NoNfcPatch.Result = NoNfcPatch::prepare,
     private val log: (String) -> Unit,
+    /** The phase in plain words, for the screen. The log stays the technical record. */
+    private val phase: (String) -> Unit = {},
 ) {
+    private var current = ""
+
+    private fun step(text: String) {
+        current = text
+        phase(text)
+    }
+
     private class Gate(val wrapper: String?, val patch: NoNfcPatch.Result)
 
     /** Read-only: does `run_cmd` execute, and is this the expected build? */
-    suspend fun probe(): String =
-        capture("id; uname -a; cat /proc/uptime; cat /proc/mounts; md5sum /app/bin/ble /app/bin/ctrl")
+    suspend fun probe(): String {
+        step("读取设备信息（约半分钟）")
+        return capture(PROBE_COMMAND)
             ?: fail("设备没有回应：run_cmd 没执行，或手机访问不到设备")
+    }
 
     /**
      * Everything up to and including the reboot. Returns the md5 [verify] expects.
@@ -65,6 +85,7 @@ class Orchestrator(
             return md5
         }
 
+        step("检查设备剩余空间")
         val wrapper = readWrapper()
         val bytes = gate.patch.ble.size.toLong() + gate.patch.ctrl.size
         checkSpace(bytes)
@@ -76,6 +97,7 @@ class Orchestrator(
 
     /** The patched programs are the ones mounted, and the merge lost nothing. */
     suspend fun verify(md5: Installed) {
+        step("核对设备上运行的程序（约半分钟）")
         val text = capture(
             "md5sum /app/bin/ble /app/bin/ctrl; echo $SPLIT; cat ${BootScript.PATH}; " +
                 "echo $SPLIT; cat ${BootScript.BACKUP} 2>/dev/null",
@@ -96,21 +118,26 @@ class Orchestrator(
      * only SSH can trigger once the device has left, reads PetKit's.
      */
     suspend fun handBack(officialUrl: String, md5: Installed?) {
+        step("登录设备")
         ssh.exec("true")
         link.startHandBack(officialUrl)
         val since = System.currentTimeMillis()
         log("服务发现已切到 $officialUrl，重启设备")
         link.enqueue("killall httpd 2>/dev/null")
         link.enqueue("reboot")
+        step("第 1 次重启：设备换到官方地址（约 1–2 分钟，屏幕会黑一下）")
         waitFor(BOOT_ATTEMPTS, "设备重启后没有来取官方地址") { link.handedBackAtMs >= since }
 
         // config_save has run by the time the reply is parsed; this is for the boot to settle.
+        step("等设备开机稳定（30 秒）")
         delay(SETTLE_MS)
         log("设备已取走官方地址，经 SSH 再重启一次取回官方 IoT")
         val secondBoot = System.currentTimeMillis()
         ssh.exec(DETACHED_REBOOT)
+        step("第 2 次重启：接回官方服务（固定等 2 分钟）")
         delay(SECOND_BOOT_MS)
 
+        step("检查补丁还在、设备连上官方")
         if (link.lastRequestMs >= secondBoot) fail("设备重启后又来找手机，交还没有生效")
         if (md5 != null) {
             val sums = ssh.exec("md5sum /app/bin/ble /app/bin/ctrl")
@@ -125,6 +152,7 @@ class Orchestrator(
      * The wrapper is rewritten before the files go, so it never names a missing file.
      */
     suspend fun remove(alsoSsh: Boolean) {
+        step("改写启动脚本")
         val text = ssh.exec("cat ${BootScript.PATH}")
         if (BootScript.kind(text) != BootScript.Kind.OURS) fail("启动脚本不认识，不改")
         var next = BootScript.withoutNoNfc(text)
@@ -133,16 +161,24 @@ class Orchestrator(
         if (BootScript.isBare(next)) {
             ssh.exec("rm -f $p")
         } else {
-            val sum = ssh.exec("cat > $p.new && chmod +x $p.new && mv -f $p.new $p && md5sum $p", next.toByteArray())
-            if (NoNfcPatch.md5(next.toByteArray()) !in sum) fail("启动脚本回读不符，不重启")
+            if (!BootScript.startsStock(next)) fail("改后的启动脚本不启动原厂程序，不写")
+            val want = NoNfcPatch.md5(next.toByteArray())
+            val sum = ssh.exec(
+                "cat > $p.new && md5sum $p.new | grep -q $want && chmod +x $p.new && " +
+                    "mv -f $p.new $p && sync; rm -f $p.new; md5sum $p",
+                next.toByteArray(),
+            )
+            if (want !in sum) fail("启动脚本回读不符，不重启")
         }
         val s = BootScript.STORE
         var files = "$s/${NoNfcPatch.BLE_NAME} $s/${NoNfcPatch.CTRL_NAME} ${BootScript.BACKUP}"
         if (alsoSsh) files += " $s/dropbear $s/dbkey_ecdsa $s/authorized_keys"
+        step("删除补丁文件")
         ssh.exec("rm -f $files")
         ssh.exec(DETACHED_REBOOT)
         log("已卸载，设备重启中")
         if (alsoSsh) return
+        step("设备重启中，等它回来核对（固定等 2 分钟）")
         delay(SECOND_BOOT_MS)
         val sums = ssh.exec("md5sum /app/bin/ble /app/bin/ctrl")
         if (STOCK_BLE_MD5 !in sums || STOCK_CTRL_MD5 !in sums) fail("重启后不是原厂程序")
@@ -151,6 +187,7 @@ class Orchestrator(
 
     /** No writes above this line of defence: identity, boot script, then the whole-file SHA. */
     private suspend fun gate(): Gate {
+        step("检查型号、固件和启动脚本")
         val id = link.identity ?: fail("设备还没上线")
         if (!id.type.equals("t6", true) || id.firmware !in FIRMWARES) {
             throw NoNfcPatch.Refused("不支持：型号 ${id.type}，固件 ${id.firmware}。只支持 T6 固件 1.951")
@@ -161,13 +198,16 @@ class Orchestrator(
 
         val wrapper = readWrapper()
         if (BootScript.kind(wrapper) == BootScript.Kind.FOREIGN) {
+            // Without the text the refusal cannot be acted on: show it, control bytes escaped.
+            log("启动脚本 ${wrapper.orEmpty().length} 字节：${BootScript.visible(wrapper.orEmpty())}")
             throw NoNfcPatch.Refused("启动脚本不是 petkit-local 的包装脚本，不改")
         }
         if (BootScript.hasMqtt(wrapper)) throw NoNfcPatch.Refused("已装 MQTT 补丁，两个都替换 ctrl，不能共存")
         BootScript.otherMounts(wrapper).forEach { log("注意：启动脚本还有其他挂载，会保留并跟着回官方：$it") }
 
+        step("从设备取回原程序核对（约 1 分钟）")
         log("下载设备上的 ble、ctrl 核对 SHA")
-        link.enqueue("busybox httpd -p $HTTPD_PORT -h /app/bin &")
+        link.enqueue("busybox httpd -p $HTTPD_PORT -h /app/bin </dev/null >/dev/null 2>&1 &")
         try {
             val ble = fetchRetrying("ble")
             val ctrl = fetchRetrying("ctrl")
@@ -180,24 +220,28 @@ class Orchestrator(
     private suspend fun ensureSsh(wrapper: String?) {
         val tag = publicKey.trim().substringAfterLast(' ')
         val keyFile = (publicKey.trim() + "\n").toByteArray()
+        val keyMd5 = NoNfcPatch.md5(keyFile)
         val url = link.stage(KEY_NAME, keyFile)
         val s = BootScript.STORE
         try {
             if (BootScript.hasSsh(wrapper)) {
+                step("给设备加入这台手机的登录钥匙")
                 log("设备已有 SSH，加入这台手机的公钥")
                 val done = capture(
-                    "wget -q -O /tmp/$KEY_NAME $url && mkdir -p /tmp/.ssh && " +
+                    "wget -q -O /tmp/$KEY_NAME $url && md5sum /tmp/$KEY_NAME | grep -q $keyMd5 && " +
+                        "mkdir -p /tmp/.ssh && { " +
                         "for f in $s/authorized_keys /tmp/.ssh/authorized_keys; do " +
                         "grep -q '$tag' \$f 2>/dev/null || cat /tmp/$KEY_NAME >> \$f; done; " +
-                        "rm -f /tmp/$KEY_NAME; echo $OK",
+                        "echo $OK; }; rm -f /tmp/$KEY_NAME",
                 )
                 if (done == null || OK !in done) fail("写入公钥没有回应")
                 ssh.exec("true")
             } else {
+                step("安装 SSH（之后设备会多重启一次）")
                 log("设备没有 SSH，先装 SSH 补丁（多一次重启）")
                 val binary = dropbear()
                 checkSpace(binary.size.toLong() + keyFile.size + DBKEY_RESERVE)
-                installDropbear(binary, url)
+                installDropbear(binary, url, keyMd5)
                 writeWrapper(wrapper, BootScript.withSsh(wrapper))
                 rebootAndWait()
                 ssh.exec("true")
@@ -209,15 +253,14 @@ class Orchestrator(
     }
 
     /** `patchers/ssh.py::build_install_commands`, minus starting it: a reboot follows. */
-    private suspend fun installDropbear(binary: ByteArray, keyUrl: String) {
+    private suspend fun installDropbear(binary: ByteArray, keyUrl: String, keyMd5: String) {
         val s = BootScript.STORE
         val url = link.stage("dropbear", binary)
         try {
             val out = capture(
                 "[ -f $s/test_case_root ] && mv $s/test_case_root $s/old_test_case_root; " +
-                    "wget -q -O $s/dropbear.new $url && chmod +x $s/dropbear.new && " +
-                    "mv -f $s/dropbear.new $s/dropbear && " +
-                    "wget -q -O $s/authorized_keys $keyUrl && " +
+                    verified(url, "$s/dropbear", NoNfcPatch.md5(binary)) + " && " +
+                    verified(keyUrl, "$s/authorized_keys", keyMd5, executable = false) + " && " +
                     "{ [ -f $s/dbkey_ecdsa ] || { cp $s/dropbear /tmp/dropbearkey && " +
                     "/tmp/dropbearkey -t ecdsa -f $s/dbkey_ecdsa && rm -f /tmp/dropbearkey; }; } && " +
                     "echo $OK; md5sum $s/dropbear",
@@ -236,14 +279,14 @@ class Orchestrator(
         val ctrl = "${BootScript.STORE}/${NoNfcPatch.CTRL_NAME}"
         val bleUrl = link.stage(NoNfcPatch.BLE_NAME, patch.ble)
         val ctrlUrl = link.stage(NoNfcPatch.CTRL_NAME, patch.ctrl)
+        step("把打好补丁的程序传回设备（约 1–2 分钟）")
         log("把打好的 ble、ctrl 传回设备")
         try {
             // A running program cannot be opened for writing, so each file lands beside
             // itself and replaces the name; the old copy runs until the reboot.
             val out = capture(
-                "wget -q -O $ble.new $bleUrl && chmod +x $ble.new && mv -f $ble.new $ble && " +
-                    "wget -q -O $ctrl.new $ctrlUrl && chmod +x $ctrl.new && mv -f $ctrl.new $ctrl; " +
-                    "md5sum $ble $ctrl",
+                verified(bleUrl, ble, md5.bleMd5) + " && " + verified(ctrlUrl, ctrl, md5.ctrlMd5) +
+                    "; md5sum $ble $ctrl",
                 UPLOAD_ATTEMPTS,
             )
             if (out == null || md5.bleMd5 !in out || md5.ctrlMd5 !in out) {
@@ -265,13 +308,17 @@ class Orchestrator(
     private suspend fun writeWrapper(old: String?, next: String) {
         val lost = if (old == null) emptyList() else BootScript.lost(old, next)
         if (lost.isNotEmpty()) fail("合并启动脚本会丢内容：$lost")
+        // The one line the box cannot boot without. Checked here as well as by md5 on the
+        // device: this script is what a bad write turns into a brick.
+        if (BootScript.kind(next) != BootScript.Kind.OURS) fail("要写的启动脚本不启动原厂程序，不写")
         val p = BootScript.PATH
+        step("写入启动脚本")
         val bytes = next.toByteArray()
         val url = link.stage("app_init.sh", bytes)
         try {
             val out = capture(
                 "if [ -f $p ] && [ ! -f ${BootScript.BACKUP} ]; then cp $p ${BootScript.BACKUP}; fi; " +
-                    "wget -q -O $p.new $url && chmod +x $p.new && mv -f $p.new $p; md5sum $p",
+                    verified(url, p, NoNfcPatch.md5(bytes)) + " && sync; md5sum $p",
             )
             if (out == null || NoNfcPatch.md5(bytes) !in out) fail("启动脚本回读不符，不重启：$out")
         } finally {
@@ -295,7 +342,9 @@ class Orchestrator(
         link.enqueue("killall httpd 2>/dev/null")
         link.enqueue("reboot")
         log("设备重启中，不要退出")
+        step("设备重启中（通常 1–2 分钟，屏幕会黑一下）")
         waitFor(BOOT_ATTEMPTS, "设备重启后没有回到手机") { link.signups > boots }
+        step("设备已开机，等它重新连上手机")
         waitFor(BOOT_ATTEMPTS, "设备重启后心跳没有恢复") { link.queueIsEmpty() }
     }
 
@@ -303,16 +352,22 @@ class Orchestrator(
      * Run a command and read back what it printed. Output goes to a one-time name in /tmp
      * and is renamed before the httpd starts, so a 200 can only ever be a complete file,
      * and a sentinel from this call rules out a leftover (`common.py::run_cmd_capture`).
+     *
+     * The httpd is backgrounded with its fds sent to /dev/null. The firmware runs each
+     * run_cmd through a pipe it reads; a foreground `busybox httpd` inherits that pipe, never
+     * daemonises cleanly, and was seen on a live T6 stuck in R never binding the port — so the
+     * phone got ConnectException while the device looked like it had "not answered". Detaching
+     * the fds lets the firmware's run_cmd return and the httpd actually listen.
      */
     private suspend fun capture(command: String, attempts: Int = CAPTURE_ATTEMPTS): String? {
         val nonce = ByteArray(8).also(SecureRandom()::nextBytes).joinToString("") { "%02x".format(it) }
         val name = "pk_$nonce"
         val sentinel = "__PK_END_$nonce"
         val out = "/tmp/$name"
-        link.enqueue(
-            "{ $command; } > $out.part 2>&1; echo $sentinel >> $out.part; " +
-                "mv $out.part $out; busybox httpd -p $PROBE_PORT -h /tmp",
-        )
+        val queued = "{ $command; } > $out.part 2>&1; echo $sentinel >> $out.part; " +
+            "mv $out.part $out; busybox httpd -p $PROBE_PORT -h /tmp </dev/null >/dev/null 2>&1 &"
+        var boots = link.signups
+        link.enqueue(queued)
         try {
             repeat(attempts) {
                 delay(POLL_MS)
@@ -320,7 +375,23 @@ class Orchestrator(
                 if (text != null && text.endsWith(sentinel)) {
                     return text.removeSuffix(sentinel).trimEnd('\n')
                 }
+                // A device that signs up again has restarted `ctrl` since the command went out,
+                // and the restart takes the command's children with it, the httpd included. On a
+                // T6 whose resolver never answers the reverse lookup `ctrl` runs at start, that
+                // happens every ~85 s, so waiting alone only ever times out. Every command here
+                // is idempotent (a verified download, a read, a conditional move), so send it again.
+                if (link.signups != boots) {
+                    boots = link.signups
+                    link.cancel(queued)
+                    link.enqueue(queued)
+                    log("设备重启过，重发命令")
+                    // Said beside the phase, not instead of it: the phase is still what is running.
+                    phase("$current · 设备自己重启过，已重发（常见，不用管）")
+                }
             }
+            // Giving up must not leave the command waiting for a heartbeat: the caller is
+            // about to unstage what it fetches and report a failure nothing will contradict.
+            if (link.cancel(queued)) log("设备一直没来取这条命令，已撤回")
             return null
         } finally {
             link.enqueue("rm -f $out $out.part")
@@ -349,18 +420,50 @@ class Orchestrator(
         const val STOCK_BLE_MD5 = "93b032945de7915c7cb99b4eda3aabbe"
         const val STOCK_CTRL_MD5 = "9b204541c21236abb78d84369565a26d"
 
+        /**
+         * Download to `dest.new`, and move it onto `dest` only if its md5 is `md5`. Anything
+         * else — a 404, a short read, a reply that is not the file — removes `dest.new` and
+         * leaves `dest` exactly as it was. `grep` rather than `md5sum -c`: this busybox is
+         * stripped, and both `md5sum` and `grep` are already relied on elsewhere.
+         */
+        internal fun verified(url: String, dest: String, md5: String, executable: Boolean = true): String =
+            "{ wget -q -O $dest.new $url && md5sum $dest.new | grep -q $md5 && " +
+                (if (executable) "chmod +x $dest.new && " else "") +
+                "mv -f $dest.new $dest || { rm -f $dest.new; false; }; }"
+
         private val FIRMWARES = setOf("951", "1.951")
         private const val HTTPD_PORT = 8888
         private const val PROBE_PORT = 8889
         private const val KEY_NAME = "authorized_keys"
         private const val SPLIT = "__PK_SPLIT__"
         private const val PRESENT = "__PK_PRESENT__"
+
+        /**
+         * Read-only, like the add-on's `PROBE_COMMAND`, plus what a box that "lost its
+         * camera", refused its boot script or keeps restarting `ctrl` needs looked at: that
+         * script, the running processes, what sits in /system and /tmp, and the kernel's
+         * lines. The T6's busybox 1.22.1 has no `head`, no `od` and a `grep` without `-E`
+         * (every one of them failed on a live box), so this uses only `tail`, `cat`,
+         * `ls` and `grep -e`; `tail -n` is the only one that cuts a file down.
+         */
+        private const val PROBE_COMMAND =
+            "id; uname -a; cat /proc/uptime; cat /proc/mounts; md5sum /app/bin/ble /app/bin/ctrl; " +
+                "echo '--- ${BootScript.PATH}'; ls -l ${BootScript.PATH}*; " +
+                "[ -f ${BootScript.PATH} ] && tail -n 40 ${BootScript.PATH}; " +
+                "echo '--- ls /system'; ls -la /system; " +
+                "echo '--- ls /tmp'; ls -la /tmp | tail -n 40; " +
+                "echo '--- ps'; ps; " +
+                "echo '--- dmesg camera'; " +
+                "dmesg | grep -i -e sensor -e isp -e vic -e cim -e camera -e i2c | tail -n 40; " +
+                "echo '--- dmesg tail'; dmesg | grep -v -e spidev | tail -n 40; " +
+                "echo '--- /dev'; ls /dev | grep -i -e video -e isp -e jz -e tx-isp -e sensor"
         private const val OK = "__PK_OK__"
         private const val DETACHED_REBOOT = "(sleep 1; reboot) >/dev/null 2>&1 &"
 
         private const val POLL_MS = 3_000L
-        private const val CAPTURE_ATTEMPTS = 30
-        private const val UPLOAD_ATTEMPTS = 60
+        // Long enough to outlast one restart cycle (~85 s) and still collect the answer.
+        private const val CAPTURE_ATTEMPTS = 60
+        private const val UPLOAD_ATTEMPTS = 90
         private const val BOOT_ATTEMPTS = 100
         private const val SETTLE_MS = 30_000L
         private const val SECOND_BOOT_MS = 120_000L

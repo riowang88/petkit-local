@@ -25,7 +25,7 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
-from petkit_local.patchers.common import patched_file_path
+from petkit_local.patchers.common import build_verified_download_cmd, patched_file_path
 
 if TYPE_CHECKING:
     from petkit_local.devices.base import Device
@@ -88,7 +88,8 @@ AUTHKEYS_STAGED_NAME = "authorized_keys"
 
 
 def build_install_commands(download_base: str, bin_name: str = DROPBEAR_BIN_NAME,
-                           device: "Device | None" = None) -> list[str]:
+                           device: "Device | None" = None, *,
+                           dropbear_md5: str, authkeys_md5: str) -> list[str]:
     """Shell commands to install dropbear on the device.
 
     Each is queued as a separate run_cmd and waited on individually, because
@@ -120,12 +121,15 @@ def build_install_commands(download_base: str, bin_name: str = DROPBEAR_BIN_NAME
         # 1. Rename an existing test_case_root out of the glob.
         f'[ -f {test_case_root} ] && mv {test_case_root} {test_case_root_old} || true',
 
-        # 2. Download the dropbear binary.
-        f'wget -q -O {dropbear} "{download_base}/{bin_name}" '
-        f'&& chmod +x {dropbear}',
+        # 2. Download the dropbear binary; it takes its name only if the md5
+        #    matches (see build_verified_download_cmd).
+        build_verified_download_cmd(
+            f'"{download_base}/{bin_name}"', dropbear, dropbear_md5),
 
-        # 3. Download authorized_keys (staged from the stored pubkey).
-        f'wget -q -O {authkeys} "{download_base}/{AUTHKEYS_STAGED_NAME}"',
+        # 3. Download authorized_keys (staged from the stored pubkey), same gate.
+        build_verified_download_cmd(
+            f'"{download_base}/{AUTHKEYS_STAGED_NAME}"', authkeys, authkeys_md5,
+            executable=False),
 
         # 4. Generate a persistent host key if one does not already exist.
         f'[ -f {dbkey} ] || '

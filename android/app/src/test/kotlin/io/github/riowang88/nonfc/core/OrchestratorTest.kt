@@ -24,6 +24,12 @@ private class FakeDevice(var wrapper: String?) : DeviceLink, SshLink {
     private val tmp = mutableMapOf<String, String>()
     var freeKb = 5023L
     var corruptUpload = false
+
+    /** A staged name the phone answers 404 for, as it does once the file is unstaged. */
+    var missing: String? = null
+    private val undelivered = mutableSetOf<String>()
+    var cancelled = 0
+    var restartsEatingCommands = 0
     var reachable = true
     var sshUp = true
     var officialUrl: String? = null
@@ -41,34 +47,53 @@ private class FakeDevice(var wrapper: String?) : DeviceLink, SshLink {
             return
         }
         val inner = Regex("""^\{ (.*); } > /tmp/(pk_\w+)\.part""").find(command) ?: return
-        if (!reachable) return
+        if (restartsEatingCommands > 0) {
+            // `ctrl` restarted right after taking it: nothing ran, and the device signed up again.
+            restartsEatingCommands--
+            signups++
+            return
+        }
+        if (!reachable) {
+            undelivered += command
+            return
+        }
         val sentinel = Regex("""echo (__PK_END_\w+)""").find(command)!!.groupValues[1]
         tmp[inner.groupValues[2]] = run(inner.groupValues[1]) + "\n" + sentinel + "\n"
     }
 
+    override fun cancel(command: String) = undelivered.remove(command).also { if (it) cancelled++ }
+
+    /**
+     * busybox for the downloads: fetch, compare the md5, and only then let the file take
+     * its name. A chain stops at the first one that fails, as `&&` does.
+     */
     private fun run(shell: String): String {
         val out = StringBuilder()
-        if ("wget -q -O /system/ble_patched.new" in shell) {
-            files["/system/ble_patched"] = staged[NoNfcPatch.BLE_NAME]!!.let { if (corruptUpload) it + 0 else it }
-            files["/system/ctrl_nonfc"] = staged[NoNfcPatch.CTRL_NAME]!!
+        if ("cp ${BootScript.PATH} " in shell) {
+            wrapper?.let { files.getOrPut(BootScript.BACKUP) { it.toByteArray() } }
         }
-        if ("wget -q -O /system/dropbear.new" in shell) {
-            files["/system/dropbear"] = staged["dropbear"]!!
-            out.append("__PK_OK__\n")
+        var landed = true
+        for (match in DOWNLOAD.findAll(shell)) {
+            val (target, url, md5) = match.destructured
+            val name = url.substringAfterLast('/')
+            var data = staged[name].takeUnless { name == missing }
+            if (data != null && corruptUpload && name == NoNfcPatch.BLE_NAME) data += 0
+            if (data == null || NoNfcPatch.md5(data) != md5) {
+                landed = false
+                break
+            }
+            val dest = target.removeSuffix(".new")
+            files[dest] = data
+            if (dest == BootScript.PATH) wrapper = String(data)
         }
-        if ("wget -q -O /system/app_init.sh.new" in shell) {
-            wrapper?.let { files[BootScript.BACKUP] = it.toByteArray() }
-            wrapper = String(staged["app_init.sh"]!!)
-            files[BootScript.PATH] = staged["app_init.sh"]!!
-        }
-        if ("authorized_keys" in shell && "__PK_OK__" in shell) out.append("__PK_OK__\n")
+        if ("__PK_OK__" in shell && landed) out.append("__PK_OK__\n")
         if ("STORAGE" in shell) out.append("STORAGE /system\n")
         if ("__PK_PRESENT__" in shell) wrapper?.let { out.append("__PK_PRESENT__\n").append(it) }
         if (shell.startsWith("df -k")) {
             out.append("Filesystem 1K-blocks Used Available Use% Mounted on\n")
             out.append("/dev/mtdblock7 16384 1000 $freeKb 9% /system\n")
         }
-        Regex("""md5sum ((?:/[^\s;]+ ?)+)""").find(shell)?.let { match ->
+        Regex("""md5sum ((?:/[^\s;]+ ?)+)""").find(shell.replace(GATE, ""))?.let { match ->
             match.groupValues[1].trim().split(" ").forEach { path ->
                 val name = path.replace("/app/bin/ble", "/system/ble_patched")
                     .replace("/app/bin/ctrl", "/system/ctrl_nonfc")
@@ -97,6 +122,11 @@ private class FakeDevice(var wrapper: String?) : DeviceLink, SshLink {
     override suspend fun fetch(port: Int, name: String): ByteArray? = when (port) {
         8888 -> byteArrayOf(0x7F, 0x45)
         else -> tmp[name]?.toByteArray()
+    }
+
+    private companion object {
+        val GATE = Regex("""md5sum \S+ \| grep -q \w+""")
+        val DOWNLOAD = Regex("""wget -q -O (\S+) (\S+) && md5sum \S+ \| grep -q (\w+)""")
     }
 
     override suspend fun exec(command: String, stdin: ByteArray?): String {
@@ -142,6 +172,16 @@ class OrchestratorTest {
     }
 
     @Test
+    fun aCommandLostToADeviceRestartIsSentAgain() = runTest {
+        val device = FakeDevice(withSsh)
+        device.restartsEatingCommands = 3
+        val md5 = orchestrator(device).install()
+        assertTrue(BootScript.hasNoNfc(device.wrapper))
+        assertEquals(NoNfcPatch.md5(ctrl), md5.ctrlMd5)
+        assertTrue(out.count { "重发" in it } >= 3)
+    }
+
+    @Test
     fun aDeviceWithoutSshGetsItFirstAndRebootsTwice() = runTest {
         val device = FakeDevice(null)
         orchestrator(device).install()
@@ -166,6 +206,47 @@ class OrchestratorTest {
         assertTrue(error!!.message!!.contains("不重启"))
         assertEquals(0, device.rebooted)
         assertEquals(withSsh, device.wrapper)
+        assertFalse("/system/ble_patched" in device.files)
+    }
+
+    /** The brick: the wrapper's download misses, and the 13-byte answer became the script. */
+    @Test
+    fun aMissedWrapperDownloadLeavesTheBootScriptAlone() = runTest {
+        val device = FakeDevice(withSsh).apply { missing = "app_init.sh" }
+        val error = runCatching { orchestrator(device).install() }.exceptionOrNull()
+        assertTrue(error!!.message!!.contains("不重启"))
+        assertEquals(0, device.rebooted)
+        assertEquals(withSsh, device.wrapper)
+    }
+
+    @Test
+    fun aMissedDropbearDownloadInstallsNothing() = runTest {
+        val device = FakeDevice(null).apply { missing = "dropbear" }
+        val error = runCatching { orchestrator(device).install() }.exceptionOrNull()
+        assertTrue(error!!.message!!.contains("不重启"))
+        assertEquals(0, device.rebooted)
+        assertEquals(null, device.wrapper)
+        assertFalse("/system/dropbear" in device.files)
+        assertFalse("/system/authorized_keys" in device.files)
+    }
+
+    /** No download may reach the name a file runs under before its md5 was compared. */
+    @Test
+    fun everyDownloadIsVerifiedBeforeItIsMoved() = runTest {
+        val device = FakeDevice(null)
+        orchestrator(device).install()
+        val downloads = device.commands.filter { "wget" in it }
+        assertTrue(downloads.size >= 4)
+        downloads.forEach { command ->
+            Regex("""wget -q -O (\S+)""").findAll(command).forEach { match ->
+                val target = match.groupValues[1]
+                assertTrue(target, target.endsWith(".new") || target.startsWith("/tmp/"))
+                val rest = command.substring(match.range.last)
+                val gate = rest.indexOf("md5sum $target | grep -q")
+                val move = rest.indexOf("mv -f $target").takeIf { it >= 0 } ?: rest.indexOf("cat $target")
+                assertTrue(command, gate in 0 until move)
+            }
+        }
     }
 
     @Test
@@ -173,6 +254,8 @@ class OrchestratorTest {
         val device = FakeDevice(withSsh).apply { reachable = false }
         assertTrue(runCatching { orchestrator(device).install() }.isFailure)
         assertEquals(0, device.rebooted)
+        // What it never collected is withdrawn, not left to run after the files are gone.
+        assertTrue(device.cancelled > 0)
     }
 
     @Test

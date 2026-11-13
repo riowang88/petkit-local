@@ -262,6 +262,8 @@ async def test_talk_apply_stages_sink_and_wrapper(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "send_run_cmd", AsyncMock(return_value="heartbeat"))
     monkeypatch.setattr(P, "wait_for_heartbeat", AsyncMock(return_value=True))
     monkeypatch.setattr(P.asyncio, "sleep", AsyncMock())
+    from tests._fakes import EchoingDevice
+    EchoingDevice(P, monkeypatch)
 
     d = Device(device_type="t6", petkit_id=7654, serial_number="SN")
     app = {"registry": MagicMock(), "bridge": None, "cfg": {"data_dir": str(tmp_path)}}
@@ -414,7 +416,14 @@ def test_patcher_device_files_keeps_absolute_paths():
 def test_ssh_install_commands_use_system_on_ingenic_layout():
     d = Device(device_type="d4sh", petkit_id=7)
     set_patch_storage_dir(d, "/system")
-    cmd = "\n".join(build_install_commands("http://host/patcher", "dropbear-mipsel", d))
+    cmd = "\n".join(build_install_commands(
+        "http://host/patcher", "dropbear-mipsel", d,
+        dropbear_md5="d" * 32, authkeys_md5="a" * 32))
+    # Neither file takes its name before its own md5 was compared on the device.
+    assert f"md5sum /system/dropbear.new | grep -q {'d' * 32} && " in cmd
+    assert f"md5sum /system/authorized_keys.new | grep -q {'a' * 32} && " in cmd
+    assert "wget -q -O /system/dropbear " not in cmd
+    assert "wget -q -O /system/authorized_keys " not in cmd
     assert "/system/dropbear" in cmd
     assert "/system/authorized_keys" in cmd
     assert "/system/dbkey_ecdsa" in cmd
@@ -424,12 +433,88 @@ def test_ssh_install_commands_use_system_on_ingenic_layout():
 def test_ssh_install_commands_use_opt_on_axera():
     d = Device(device_type="d4sh", petkit_id=7)
     set_patch_storage_dir(d, "/opt")
-    cmd = "\n".join(build_install_commands("http://host/patcher", "dropbear-armv7", d))
+    cmd = "\n".join(build_install_commands(
+        "http://host/patcher", "dropbear-armv7", d,
+        dropbear_md5="d" * 32, authkeys_md5="a" * 32))
     assert "/opt/dropbear" in cmd
     assert "/opt/authorized_keys" in cmd
     assert "/opt/dbkey_ecdsa" in cmd
     assert "/opt/test_case_root" in cmd
     assert "/system/dropbear" not in cmd
+
+
+# --- build_verified_download_cmd ---
+# Run by a real `sh` against a stand-in `wget`: the string is the whole defence on
+# the device, so it is executed rather than pattern-matched.
+
+_GOOD = b"#!/bin/sh\n. /app/script/app_init.sh\n"
+
+
+def _download(tmp_path, served: bytes, status: int = 0):
+    """Run the command with `wget` writing `served` and exiting `status`."""
+    import shutil
+    import subprocess
+
+    import pytest
+
+    from petkit_local.patchers.common import build_verified_download_cmd, md5hex
+
+    if not shutil.which("md5sum"):
+        pytest.skip("no md5sum on this host")
+    dest = tmp_path / "app_init.sh"
+    dest.write_text("old\n")
+    (tmp_path / "served").write_bytes(served)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    wget = bin_dir / "wget"
+    wget.write_text(f"#!/bin/sh\ncp '{tmp_path}/served' \"$3\"\nexit {status}\n")
+    wget.chmod(0o755)
+    command = build_verified_download_cmd("http://host/x", str(dest), md5hex(_GOOD))
+    run = subprocess.run(
+        ["/bin/sh", "-c", command], capture_output=True,
+        env={"PATH": f"{bin_dir}:{os.environ['PATH']}"})
+    return run.returncode, dest
+
+
+def test_verified_download_replaces_the_file_with_the_right_bytes(tmp_path):
+    code, dest = _download(tmp_path, _GOOD)
+    assert code == 0
+    assert dest.read_bytes() == _GOOD
+    assert os.access(dest, os.X_OK)
+    assert not (tmp_path / "app_init.sh.new").exists()
+
+
+def test_verified_download_keeps_the_old_file_when_a_200_is_not_the_file(tmp_path):
+    """What bricked a T6: a 200 whose 13-byte body became the boot script."""
+    code, dest = _download(tmp_path, b'{"result":{}}')
+    assert code != 0
+    assert dest.read_text() == "old\n"
+    assert not (tmp_path / "app_init.sh.new").exists()
+
+
+def test_verified_download_keeps_the_old_file_when_the_transfer_is_cut(tmp_path):
+    code, dest = _download(tmp_path, _GOOD[:-5])
+    assert code != 0
+    assert dest.read_text() == "old\n"
+
+
+def test_verified_download_keeps_the_old_file_when_wget_fails(tmp_path):
+    code, dest = _download(tmp_path, b"", status=1)
+    assert code != 0
+    assert dest.read_text() == "old\n"
+    assert not (tmp_path / "app_init.sh.new").exists()
+
+
+def test_verified_download_chains_as_one_command(tmp_path):
+    """`a && b` must not run `b` after a failed download, nor skip it after a good one."""
+    import subprocess
+
+    from petkit_local.patchers.common import build_verified_download_cmd
+    command = build_verified_download_cmd("u", str(tmp_path / "f"), "0" * 32)
+    run = subprocess.run(
+        ["/bin/sh", "-c", f"wget() {{ return 1; }}; {command} && echo RAN"],
+        capture_output=True, text=True)
+    assert "RAN" not in run.stdout
 
 
 # --- build_wrapper_upload_cmd ---

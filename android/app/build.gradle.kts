@@ -25,6 +25,9 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("generated/dropbear"))
+    // Untracked, and empty in a clean checkout: pictures a local build may carry but the
+    // repository must not, such as PetKit's own pairing illustration (t6_bind_start.png).
+    sourceSets["main"].assets.srcDir("local-assets")
 
     testOptions { unitTests.isReturnDefaultValues = true }
 }

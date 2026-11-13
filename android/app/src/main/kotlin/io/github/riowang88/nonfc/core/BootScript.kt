@@ -36,6 +36,20 @@ object BootScript {
         else -> Kind.FOREIGN
     }
 
+    /** The script as one log line: newlines as ⏎, other control bytes as \xNN. */
+    fun visible(text: String): String = buildString {
+        text.forEach { ch ->
+            when {
+                ch == '\n' -> append('⏎')
+                ch < ' ' || ch == '\u007f' -> append("\\x%02x".format(ch.code))
+                else -> append(ch)
+            }
+        }
+    }
+
+    /** Whether the script hands over to the stock init, without which nothing starts. */
+    fun startsStock(text: String): Boolean = text.lines().any { it.trim() == STOCK_LINE }
+
     fun hasSsh(text: String?): Boolean = text != null && "/dropbear " in text
 
     fun hasNoNfc(text: String?): Boolean =

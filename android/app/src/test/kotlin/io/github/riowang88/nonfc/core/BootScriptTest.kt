@@ -86,4 +86,9 @@ class BootScriptTest {
         assertTrue(BootScript.isBare(BootScript.withoutSsh(BootScript.withoutNoNfc(ours))))
         assertFalse(BootScript.isBare(BootScript.withoutSsh(BootScript.withoutNoNfc(BootScript.withNoNfc(nasWrapper)))))
     }
+
+    @Test
+    fun `a refused script is shown with its invisible bytes`() {
+        assertEquals("#!/bin/sh⏎\\x00\\x1b⏎", BootScript.visible("#!/bin/sh\n\u0000\u001b\n"))
+    }
 }

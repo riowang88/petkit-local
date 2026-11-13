@@ -6,6 +6,7 @@ import pytest
 
 from petkit_local.devices.base import Device
 from petkit_local.patchers.common import generate_app_init_wrapper, get_staged_path, md5hex
+from tests._fakes import EchoingDevice
 from petkit_local.patchers.no_nfc import (
     BLE_CANDIDATE_SHA256, BLE_ORIGINAL_SHA256, BLE_PATCHED_NAME,
     CTRL_CANDIDATE_SHA256, CTRL_ORIGINAL_SHA256, CTRL_PATCHED_NAME,
@@ -194,8 +195,6 @@ async def test_apply_uploads_both_files_and_keeps_the_other_patchers(monkeypatch
     monkeypatch.setattr(P, "ensure_space_for", AsyncMock(return_value="space ok"))
     monkeypatch.setattr(P, "send_run_cmd", AsyncMock(return_value="heartbeat"))
     monkeypatch.setattr(P, "wait_for_heartbeat", AsyncMock(return_value=True))
-    monkeypatch.setattr(P, "run_cmd_capture", AsyncMock(
-        return_value=f"{md5hex(b'ble-patched')} ble\n{md5hex(b'ctrl-patched')} ctrl\n"))
     monkeypatch.setattr(P, "download_from_device", AsyncMock(side_effect=[b"B" * 2048, b"C" * 2048]))
     monkeypatch.setattr(P, "patch_ble", lambda data: b"ble-patched")
     monkeypatch.setattr(P, "patch_ctrl_nfc", lambda data: b"ctrl-patched")
@@ -203,14 +202,7 @@ async def test_apply_uploads_both_files_and_keeps_the_other_patchers(monkeypatch
 
     d = Device(device_type="t6", petkit_id=10000001, serial_number="SN")
     d.config["active_patchers"] = ["cloud", "cacert", "camera", "ssh"]
-    staged: dict[str, bytes] = {}
-    real_stage = P.stage_file
-
-    def _stage(name, data, device_id):
-        staged[name] = data
-        return real_stage(name, data, device_id)
-
-    monkeypatch.setattr(P, "stage_file", _stage)
+    staged = EchoingDevice(P, monkeypatch).staged
     app = {"registry": MagicMock(), "bridge": None, "cfg": {}}
     await P._patcher_apply(d, "no_nfc", "192.0.2.10",
                            "http://192.0.2.1/patcher/download/10000001", MagicMock(), app)
@@ -230,3 +222,87 @@ async def test_apply_uploads_both_files_and_keeps_the_other_patchers(monkeypatch
     wrapper = next(call.args[1] for call in P.send_run_cmd.await_args_list
                    if "app_init.sh" in call.args[1])
     assert "wget" in wrapper and "reboot" in uploaded
+    # Each file is compared on the device before it takes its name.
+    for path, data in (("/system/ble_patched", b"ble-patched"),
+                       ("/system/ctrl_nonfc", b"ctrl-patched"),
+                       ("/system/app_init.sh", staged["app_init.sh"])):
+        gate = f"md5sum {path}.new | grep -q {md5hex(data)} && "
+        assert gate in uploaded
+        assert uploaded.index(gate) < uploaded.index(f"mv -f {path}.new {path}")
+
+
+async def _apply_no_nfc(monkeypatch, lost: str):
+    """Run the no-NFC apply with one file's download never landing."""
+    from petkit_local.web.api import patchers as P
+
+    monkeypatch.setattr(P, "detect_patch_storage_dir", AsyncMock(return_value="/system"))
+    monkeypatch.setattr(P, "ensure_space_for", AsyncMock(return_value="space ok"))
+    monkeypatch.setattr(P, "send_run_cmd", AsyncMock(return_value="heartbeat"))
+    monkeypatch.setattr(P, "wait_for_heartbeat", AsyncMock(return_value=True))
+    monkeypatch.setattr(P, "download_from_device", AsyncMock(side_effect=[b"B" * 2048, b"C" * 2048]))
+    monkeypatch.setattr(P, "patch_ble", lambda data: b"ble-patched")
+    monkeypatch.setattr(P, "patch_ctrl_nfc", lambda data: b"ctrl-patched")
+    monkeypatch.setattr(P.asyncio, "sleep", AsyncMock())
+    EchoingDevice(P, monkeypatch).lost.add(lost)
+
+    d = Device(device_type="t6", petkit_id=10000001, serial_number="SN")
+    d.config["active_patchers"] = ["ssh"]
+    with pytest.raises(RuntimeError, match="not rebooting"):
+        await P._patcher_apply(d, "no_nfc", "192.0.2.10",
+                               "http://192.0.2.1/patcher/download/10000001", MagicMock(),
+                               {"registry": MagicMock(), "bridge": None, "cfg": {}})
+    return d, [call.args[1] for call in P.send_run_cmd.await_args_list]
+
+
+async def test_a_wrapper_that_did_not_arrive_is_never_rebooted_into(monkeypatch):
+    """The brick: the boot script's download missed and the device rebooted anyway."""
+    d, sent = await _apply_no_nfc(monkeypatch, lost="app_init.sh")
+    assert "reboot" not in sent
+    # The record still describes the device: the old wrapper mounts no no-NFC files.
+    assert d.config["active_patchers"] == ["ssh"]
+
+
+async def test_a_program_that_did_not_arrive_stops_before_the_wrapper(monkeypatch):
+    d, sent = await _apply_no_nfc(monkeypatch, lost="ctrl_nonfc")
+    assert "reboot" not in sent
+    assert not any("app_init.sh" in command for command in sent)
+    assert d.config["active_patchers"] == ["ssh"]
+
+
+async def _remove_no_nfc(monkeypatch, lost: bool):
+    from petkit_local.web.api import patchers as P
+
+    monkeypatch.setattr(P, "detect_patch_storage_dir", AsyncMock(return_value="/system"))
+    monkeypatch.setattr(P, "send_run_cmd", AsyncMock(return_value="heartbeat"))
+    monkeypatch.setattr(P, "wait_for_heartbeat", AsyncMock(return_value=True))
+    monkeypatch.setattr(P.asyncio, "sleep", AsyncMock())
+    echo = EchoingDevice(P, monkeypatch)
+    if lost:
+        echo.lost.add("app_init.sh")
+    d = Device(device_type="t6", petkit_id=10000001, serial_number="SN")
+    d.config["active_patchers"] = ["no_nfc", "ssh"]
+    run = P._patcher_remove(d, "no_nfc", "192.0.2.10",
+                            "http://192.0.2.1/patcher/download/10000001", MagicMock(),
+                            {"registry": MagicMock(), "bridge": None})
+    if lost:
+        with pytest.raises(RuntimeError, match="not rebooting"):
+            await run
+    else:
+        await run
+    return d, [call.args[1] for call in P.send_run_cmd.await_args_list]
+
+
+async def test_removal_deletes_the_programs_only_behind_a_verified_wrapper(monkeypatch):
+    d, sent = await _remove_no_nfc(monkeypatch, lost=False)
+    command = next(c for c in sent if "app_init.sh" in c)
+    # `&&` all the way: a wrapper that failed its md5 leaves the files it mounts.
+    assert command.index("mv -f /system/app_init.sh.new") < command.index("&& rm -f /system/ble_patched")
+    assert "; rm -f /system/ble_patched" not in command
+    assert sent[-1] == "reboot"
+    assert d.config["active_patchers"] == ["ssh"]
+
+
+async def test_removal_that_cannot_verify_the_wrapper_does_not_reboot(monkeypatch):
+    d, sent = await _remove_no_nfc(monkeypatch, lost=True)
+    assert "reboot" not in sent
+    assert d.config["active_patchers"] == ["no_nfc", "ssh"]

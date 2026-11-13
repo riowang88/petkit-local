@@ -51,6 +51,16 @@ class PhoneServerTest {
         assertArrayEquals(data, request(path).second)
     }
 
+    /** Over a real socket, because the status was once dropped between the two classes. */
+    @Test
+    fun aMissingStagedFileIsA404OnTheWire() {
+        request("/6/t6/dev_signup?firmware=951")
+        val path = api.stage("app_init.sh", byteArrayOf(1)).substringAfter(":$port")
+        api.unstage("app_init.sh")
+        val c = URL("http://127.0.0.1:$port$path").openConnection() as HttpURLConnection
+        assertEquals(404, c.responseCode)
+    }
+
     @Test
     fun aResumedSessionKnowsItsDevice() {
         api.restoreDevice("127.0.0.1", "t6", "951")

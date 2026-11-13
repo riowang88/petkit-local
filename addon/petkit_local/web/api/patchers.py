@@ -25,7 +25,7 @@ from petkit_local.patchers.camera import PATCHER_INFO as CAMERA_PATCHER
 from petkit_local.patchers.cloud import PATCHER_INFO as CLOUD_PATCHER, patch_cloud
 from petkit_local.patchers.common import (
     DEVICE_HTTPD_PORT, TALK_SINK_NAME, TALK_SINK_SCRIPT, app_init_wrapper_path,
-    build_wrapper_remove_cmd, cleanup_staged, detect_patch_storage_dir,
+    build_verified_download_cmd, build_wrapper_remove_cmd, cleanup_staged, detect_patch_storage_dir,
     download_from_device, ensure_space_for, generate_app_init_wrapper, md5hex,
     patched_file_path, patcher_device_files, run_cmd_capture, send_run_cmd,
     stage_file, wait_for_heartbeat,
@@ -36,7 +36,7 @@ from petkit_local.patchers.no_nfc import (
     patch_ble, patch_ctrl_nfc,
 )
 from petkit_local.patchers.ssh import (
-    AUTHKEYS_STAGED_NAME,
+    AUTHKEYS_NAME, AUTHKEYS_STAGED_NAME, DROPBEAR_NAME,
     PATCHER_INFO as SSH_PATCHER, build_install_commands as ssh_install_commands,
     ARCH_TO_BINARY as SSH_ARCH_TO_BINARY,
     DBKEY_RESERVE_BYTES, dropbear_path_for,
@@ -281,6 +281,30 @@ def _save_active_patchers(d: Device, active: set[str], registry: DeviceRegistry)
     registry.save()
 
 
+async def _require_written(d: Device, device_ip: str, expected: dict[str, bytes],
+                           bridge: Any) -> None:
+    """Read back the md5 of each device path and raise unless every one matches.
+
+    This is the gate in front of every reboot. The download command already
+    refuses to put a wrong file under its name, so a mismatch here normally means
+    the file never arrived and the OLD one is still in place — and rebooting
+    then would start the device on a boot script that mounts something stale or
+    missing. No answer at all is treated the same: unknown is not verified.
+
+    Raises:
+        RuntimeError: naming the paths that did not match. The caller's task
+            wrapper turns it into the FAILED line the operator sees.
+    """
+    out = await run_cmd_capture(
+        d, device_ip, "md5sum " + " ".join(expected), bridge=bridge)
+    bad = [path for path, data in expected.items()
+           if not out or md5hex(data) not in out]
+    if bad:
+        raise RuntimeError(
+            f"{', '.join(bad)} on the device does not match what was sent; "
+            "not rebooting")
+
+
 async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_base: str,
                          hub: EventHub, app: web.Application) -> None:
     """Download the target file from the device, patch it, and put it back.
@@ -297,6 +321,12 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
 
     The final step rewrites /system/app_init.sh from the FULL active set and
     reboots, so patchers compose instead of overwriting each other.
+
+    Nothing takes its name on the device before its md5 matched there
+    (`build_verified_download_cmd`), and nothing reboots before the same md5 was
+    read back here (`_require_written`). The patcher is recorded as active only
+    after the wrapper passed, so a failed run leaves the record describing the
+    device as it still is.
     """
     did = d.petkit_id
     reg = app["registry"]
@@ -368,16 +398,20 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
         # write is left completely untouched.
         hub.publish("patcher", did, f"{P} checking free space on device...")
         hub.publish("patcher", did, f"{P} " + await ensure_space_for(
+            # No credit for an existing copy: the new one lands beside it and
+            # the old one is only freed by the rename.
             d, device_ip, write_bytes=len(patched),
-            targets=[device_path, wrapper_path], bridge=bridge,
+            targets=[wrapper_path], bridge=bridge,
             mount=storage_dir))
 
         stage_file(staged_name, patched, did)
         hub.publish("patcher", did, f"{P} uploading {staged_name} to device...")
         await asyncio.sleep(12)
 
-        await send_run_cmd(d, f"wget -q -O {device_path} {download_base}/{staged_name} && chmod +x {device_path}", bridge)
+        await send_run_cmd(d, build_verified_download_cmd(
+            f"{download_base}/{staged_name}", device_path, md5hex(patched)), bridge)
         await asyncio.sleep(12)
+        await _require_written(d, device_ip, {device_path: patched}, bridge)
         cleanup_staged(staged_name, did)
         hub.publish("patcher", did, f"{P} file uploaded to {device_path}")
 
@@ -411,18 +445,19 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
             dropbear = f.read()
 
         authkeys = (pubkey.strip() + "\n").encode()
-        ssh_paths = patcher_device_files(SSH_PATCHER, d)
         hub.publish("patcher", did, f"{P} checking free space on device...")
         hub.publish("patcher", did, f"{P} " + await ensure_space_for(
             d, device_ip, write_bytes=len(dropbear) + len(authkeys) + DBKEY_RESERVE_BYTES,
-            targets=[*ssh_paths, wrapper_path],
+            targets=[wrapper_path],
             bridge=bridge, mount=storage_dir))
 
         stage_file(bin_name, dropbear, did)
         stage_file(AUTHKEYS_STAGED_NAME, authkeys, did)
         hub.publish("patcher", did, f"{P} staged {bin_name} + authorized_keys for download")
 
-        cmds = ssh_install_commands(download_base, bin_name, d)
+        cmds = ssh_install_commands(
+            download_base, bin_name, d,
+            dropbear_md5=md5hex(dropbear), authkeys_md5=md5hex(authkeys))
         for i, cmd in enumerate(cmds, 1):
             hub.publish("patcher", did, f"{P} step {i}/{len(cmds)}: {cmd[:80]}...")
             await send_run_cmd(d, cmd, bridge)
@@ -430,6 +465,10 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
                 hub.publish("patcher", did, f"{P} step {i} timed out (device may not have polled)")
             await asyncio.sleep(12)
 
+        await _require_written(d, device_ip, {
+            patched_file_path(DROPBEAR_NAME, d): dropbear,
+            patched_file_path(AUTHKEYS_NAME, d): authkeys,
+        }, bridge)
         cleanup_staged(bin_name, did)
         cleanup_staged(AUTHKEYS_STAGED_NAME, did)
         hub.publish("patcher", did, f"{P} dropbear installed, SSH should be reachable now")
@@ -445,21 +484,22 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
         hub.publish("patcher", did, f"{P} checking free space on device...")
         hub.publish("patcher", did, f"{P} " + await ensure_space_for(
             d, device_ip, write_bytes=len(sink),
-            targets=[sink_path, wrapper_path], bridge=bridge, mount=storage_dir))
+            targets=[wrapper_path], bridge=bridge, mount=storage_dir))
 
         stage_file(TALK_SINK_NAME, sink, did)
         hub.publish("patcher", did, f"{P} uploading sink script to {sink_path}...")
         await send_run_cmd(
             d,
-            f"wget -q -O {sink_path} {download_base}/{TALK_SINK_NAME} && "
-            f"chmod +x {sink_path}",
+            build_verified_download_cmd(
+                f"{download_base}/{TALK_SINK_NAME}", sink_path, md5hex(sink)),
             bridge,
         )
-        if not await wait_for_heartbeat(d, timeout=30):
-            hub.publish("patcher", did, f"{P} sink upload timed out - staged file kept for retry")
-        else:
+        if await wait_for_heartbeat(d, timeout=30):
             await asyncio.sleep(15)
-            cleanup_staged(TALK_SINK_NAME, did)
+        else:
+            hub.publish("patcher", did, f"{P} sink upload timed out - checking the device anyway")
+        await _require_written(d, device_ip, {sink_path: sink}, bridge)
+        cleanup_staged(TALK_SINK_NAME, did)
 
     elif patcher_id == "no_nfc":
         hub.publish("patcher", did, f"{P} starting temp httpd on device...")
@@ -502,10 +542,10 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
         # copy until the reboot below.
         await send_run_cmd(
             d,
-            f"wget -q -O {ble_path}.new {download_base}/{BLE_PATCHED_NAME} && "
-            f"chmod +x {ble_path}.new && mv -f {ble_path}.new {ble_path} && "
-            f"wget -q -O {ctrl_path}.new {download_base}/{CTRL_PATCHED_NAME} && "
-            f"chmod +x {ctrl_path}.new && mv -f {ctrl_path}.new {ctrl_path}",
+            build_verified_download_cmd(
+                f"{download_base}/{BLE_PATCHED_NAME}", ble_path, md5hex(ble_patched))
+            + " && " + build_verified_download_cmd(
+                f"{download_base}/{CTRL_PATCHED_NAME}", ctrl_path, md5hex(ctrl_patched)),
             bridge,
         )
         if not await wait_for_heartbeat(d, timeout=60):
@@ -514,13 +554,8 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
         await asyncio.sleep(15)
         cleanup_staged(BLE_PATCHED_NAME, did)
         cleanup_staged(CTRL_PATCHED_NAME, did)
-        written = await run_cmd_capture(
-            d, device_ip, f"md5sum {ble_path} {ctrl_path}", bridge=bridge)
-        ble_md5 = md5hex(ble_patched)
-        ctrl_md5 = md5hex(ctrl_patched)
-        if not written or ble_md5 not in written or ctrl_md5 not in written:
-            raise RuntimeError(
-                "uploaded ble/ctrl do not match the patched bytes; not rebooting")
+        await _require_written(
+            d, device_ip, {ble_path: ble_patched, ctrl_path: ctrl_patched}, bridge)
         hub.publish("patcher", did, f"{P} files uploaded to {ble_path} and {ctrl_path}")
 
     else:
@@ -534,27 +569,27 @@ async def _patcher_apply(d: Device, patcher_id: str, device_ip: str, download_ba
 
     active = _get_active_patchers(d)
     active.add(patcher_id)
-    _save_active_patchers(d, active, reg)
 
     hub.publish("patcher", did, f"{P} uploading {wrapper_path} wrapper...")
-    wrapper_content = generate_app_init_wrapper(active, d)
-    stage_file("app_init.sh", wrapper_content.encode(), did)
+    wrapper = generate_app_init_wrapper(active, d).encode()
+    stage_file("app_init.sh", wrapper, did)
     await send_run_cmd(
         d,
-        f"wget -q -O {wrapper_path} {download_base}/app_init.sh && "
-        f"chmod +x {wrapper_path}",
+        build_verified_download_cmd(
+            f"{download_base}/app_init.sh", wrapper_path, md5hex(wrapper)) + " && sync",
         bridge,
     )
-    # Wait for the device to actually fetch the file BEFORE cleaning it up.
-    # The old code cleaned after a fixed 15 s, which raced with the heartbeat:
-    # the device polls every ~10 s, the command reaches it on the next poll, and
-    # the wget runs after that — easily 20+ s total. A 404 meant the wrapper
-    # was never delivered, and the device rebooted into a stale one.
-    if not await wait_for_heartbeat(d, timeout=30):
-        hub.publish("patcher", did, f"{P} wrapper upload timed out - staged file kept for retry")
-    else:
+    # The device polls every ~10 s, the command reaches it on the next poll, and
+    # the wget runs after that — easily 20+ s total. The staged file therefore
+    # stays until the device is SEEN to hold it; a timeout here is not a reason
+    # to reboot on, and the read-back below is what decides.
+    if await wait_for_heartbeat(d, timeout=30):
         await asyncio.sleep(15)
-        cleanup_staged("app_init.sh", did)
+    else:
+        hub.publish("patcher", did, f"{P} wrapper upload timed out - checking the device anyway")
+    await _require_written(d, device_ip, {wrapper_path: wrapper}, bridge)
+    cleanup_staged("app_init.sh", did)
+    _save_active_patchers(d, active, reg)
 
     hub.publish("patcher", did, f"{P} rebooting device...")
     await send_run_cmd(d, "reboot", bridge)
@@ -580,7 +615,6 @@ async def _patcher_remove(d: Device, patcher_id: str, device_ip: str, download_b
 
     active = _get_active_patchers(d)
     active.discard(patcher_id)
-    _save_active_patchers(d, active, reg)
 
     pinfo = ALL_PATCHERS[patcher_id]
     # A pure bind-mount patcher (camera) puts no file on the device, and
@@ -592,28 +626,30 @@ async def _patcher_remove(d: Device, patcher_id: str, device_ip: str, download_b
 
     if active:
         hub.publish("patcher", did, f"{P} uploading updated wrapper...")
-        wrapper_content = generate_app_init_wrapper(active, d)
-        stage_file("app_init.sh", wrapper_content.encode(), did)
-        # Delete the patched files and download the new wrapper in one command,
-        # so the device never boots with a wrapper that references files that
-        # no longer exist.
+        wrapper = generate_app_init_wrapper(active, d).encode()
+        stage_file("app_init.sh", wrapper, did)
+        # One command, wrapper FIRST: the patched files are deleted only once the
+        # wrapper that no longer mounts them is verified in place. The other
+        # order left, on a failed download, the old wrapper mounting files that
+        # were already gone.
         await send_run_cmd(
             d,
-            f"{cleanup_cmds}; "
-            f"wget -q -O {wrapper_path} {download_base}/app_init.sh && "
-            f"chmod +x {wrapper_path}",
+            build_verified_download_cmd(
+                f"{download_base}/app_init.sh", wrapper_path, md5hex(wrapper))
+            + f" && sync && {cleanup_cmds}",
             bridge,
         )
-        # Same wait-then-cleanup as apply: the staged file must survive until
-        # the device actually fetches it.
-        if not await wait_for_heartbeat(d, timeout=30):
-            hub.publish("patcher", did, f"{P} wrapper upload timed out - staged file kept for retry")
-        else:
+        if await wait_for_heartbeat(d, timeout=30):
             await asyncio.sleep(15)
-            cleanup_staged("app_init.sh", did)
+        else:
+            hub.publish("patcher", did, f"{P} wrapper upload timed out - checking the device anyway")
+        await _require_written(d, device_ip, {wrapper_path: wrapper}, bridge)
+        cleanup_staged("app_init.sh", did)
+        _save_active_patchers(d, active, reg)
         hub.publish("patcher", did, f"{P} rebooting device...")
         await send_run_cmd(d, "reboot", bridge)
     else:
+        _save_active_patchers(d, active, reg)
         await send_run_cmd(
             d, f"{cleanup_cmds}; {build_wrapper_remove_cmd(d)} && reboot",
             bridge)
